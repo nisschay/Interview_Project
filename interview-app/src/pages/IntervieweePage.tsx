@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Input, Button, Upload, Select, Typography, Space, Alert, Row, Col, Table, Tag, Timeline } from 'antd';
-import { MessageOutlined, UploadOutlined, PlayCircleOutlined, StopOutlined, SendOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { MessageOutlined, UploadOutlined, PlayCircleOutlined, StopOutlined, SendOutlined, ClockCircleOutlined, CheckOutlined } from '@ant-design/icons';
 import { useSelector, useDispatch } from 'react-redux';
 import type { RootState } from '../store/store';
 import { startInterview, endInterview, addMessage, setResumeContent, setJobDescription, setInterviewConfig } from '../store/slices/interviewSlice';
 import ChatInterface from '../components/Chat/ChatInterface';
 import aiService from '../services/aiService';
+import ResumeUploader from '../components/ResumeParser/ResumeUploader';
 
 const { TextArea } = Input;
 const { Title, Text } = Typography;
@@ -19,6 +20,8 @@ const IntervieweePage: React.FC = () => {
 
   const [jobDescription, setJobDesc] = useState('');
   const [resumeFile, setResumeFile] = useState<any>(null);
+  const [parsedResume, setParsedResume] = useState<any>(null);
+  const [parsedConfirmed, setParsedConfirmed] = useState(false);
   const [currentAnswer, setCurrentAnswer] = useState('');
 
   const handleStartInterview = async () => {
@@ -105,6 +108,17 @@ const IntervieweePage: React.FC = () => {
       }, 1000);
     }
   };
+
+  const handleConfirmParsed = () => {
+    if (!parsedResume) return;
+    // save raw text to redux so AI can use it
+    dispatch(setResumeContent(parsedResume.rawText || ''));
+    setResumeFile(parsedResume);
+    setParsedConfirmed(true);
+  };
+
+  // ensure start requires parsed confirmation if resume uploaded
+  const canStart = jobDescription.trim() && (!parsedResume || parsedConfirmed);
 
   // Active Interview Layout - Dashboard Style like Interviewer
   if (isActive) {
@@ -418,43 +432,70 @@ const IntervieweePage: React.FC = () => {
             </Space>
           </div>
 
-          {/* Resume Upload */}
+          {/* Resume Upload -> replaced with ResumeUploader */}
           <div>
             <Title level={4} style={{ marginBottom: '16px' }}>Upload Resume</Title>
-            <Upload
-              accept=".pdf,.docx"
-              onChange={handleFileUpload}
-              showUploadList={false}
-            >
-              <Button 
-                icon={<UploadOutlined />} 
-                size="large" 
-                style={{ 
-                  width: '100%', 
-                  height: '120px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '16px',
-                  border: '2px dashed #d9d9d9'
-                }}
-              >
-                <div>
-                  {resumeFile ? (
-                    <>
-                      <div style={{ color: '#52c41a', marginBottom: '4px' }}>✓ Uploaded</div>
-                      <div style={{ fontSize: '14px' }}>{resumeFile.name}</div>
-                    </>
-                  ) : (
-                    <>
-                      <div>Click to Upload</div>
-                      <div style={{ fontSize: '14px', color: '#999' }}>PDF or DOCX</div>
-                    </>
-                  )}
-                </div>
-              </Button>
-            </Upload>
+            <ResumeUploader
+              onResult={(parsed) => {
+                setParsedResume(parsed);
+                setParsedConfirmed(false);
+              }}
+            />
+
+            {/* Show parsed fields for review/edit */}
+            {parsedResume && (
+              <div style={{ marginTop: 16, background: '#fafafa', padding: 12, borderRadius: 8 }}>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>Parsed details (edit if needed)</div>
+                <Input
+                  placeholder="Name"
+                  value={parsedResume.name || ''}
+                  onChange={(e) => setParsedResume({ ...parsedResume, name: e.target.value })}
+                  style={{ marginBottom: 8 }}
+                />
+                <Input
+                  placeholder="Age"
+                  value={parsedResume.age || ''}
+                  onChange={(e) => setParsedResume({ ...parsedResume, age: e.target.value })}
+                  style={{ marginBottom: 8 }}
+                />
+                <Input
+                  placeholder="Gender"
+                  value={parsedResume.gender || ''}
+                  onChange={(e) => setParsedResume({ ...parsedResume, gender: e.target.value })}
+                  style={{ marginBottom: 8 }}
+                />
+                <Input
+                  placeholder="Phone"
+                  value={parsedResume.phone || ''}
+                  onChange={(e) => setParsedResume({ ...parsedResume, phone: e.target.value })}
+                  style={{ marginBottom: 8 }}
+                />
+                <Input
+                  placeholder="Email"
+                  value={parsedResume.email || ''}
+                  onChange={(e) => setParsedResume({ ...parsedResume, email: e.target.value })}
+                  style={{ marginBottom: 8 }}
+                />
+
+                <Space style={{ marginTop: 12 }}>
+                  <Button type="primary" icon={<CheckOutlined />} onClick={handleConfirmParsed}>
+                    Confirm & Save
+                  </Button>
+                  <Button onClick={() => { setParsedResume(null); setParsedConfirmed(false); setResumeFile(null); }}>
+                    Remove
+                  </Button>
+                </Space>
+
+                {!parsedConfirmed && (
+                  <Alert
+                    message="Please confirm parsed details before starting the interview"
+                    type="info"
+                    showIcon
+                    style={{ marginTop: 12 }}
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -481,13 +522,13 @@ const IntervieweePage: React.FC = () => {
           />
         )}
 
-        {/* Start Button */}
+        {/* Start Button - disabled until parsed details confirmed (if resume uploaded) */}
         <Button
           type="primary"
           size="large"
           icon={<PlayCircleOutlined />}
           onClick={handleStartInterview}
-          disabled={!jobDescription.trim()}
+          disabled={!canStart}
           style={{ 
             width: '100%', 
             height: '50px',
