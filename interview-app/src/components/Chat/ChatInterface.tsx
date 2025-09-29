@@ -110,16 +110,27 @@ const ChatInterface: React.FC = () => {
         </Space>
       }
       style={{ 
-        height: '100%', 
+        height: '100%',
         display: 'flex', 
         flexDirection: 'column',
         borderRadius: '16px',
         border: 'none',
         boxShadow: '0 4px 16px rgba(102, 126, 234, 0.1)'
       }}
-      bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 0 }}
+      bodyStyle={{ 
+        flex: 1, 
+        display: 'flex', 
+        flexDirection: 'column', 
+        padding: 0,
+        minHeight: 0
+      }}
     >
-      <div style={{ flex: 1, padding: 16, overflow: 'auto', maxHeight: 'calc(100vh - 300px)' }}>
+      <div style={{ 
+        flex: 1, 
+        padding: 16, 
+        overflow: 'auto',
+        minHeight: 0
+      }}>
         {messages.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40 }}>
             <RobotOutlined style={{ fontSize: 48, color: '#1890ff', marginBottom: 16 }} />

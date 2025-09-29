@@ -56,7 +56,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const currentTab = location.pathname === '/' ? 'interviewee' : location.pathname.slice(1);
 
   return (
-    <Layout style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+    <Layout style={{ 
+      minHeight: '100vh', 
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
       <Header style={{ 
         background: 'rgba(255, 255, 255, 0.95)', 
         backdropFilter: 'blur(10px)',
@@ -68,7 +73,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
         position: 'sticky',
         top: 0,
-        zIndex: 1000
+        zIndex: 1000,
+        height: '64px',
+        flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
           <Title level={3} style={{ 
@@ -109,23 +116,23 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         </div>
       </Header>
       <Content style={{ 
-        padding: '32px', 
-        background: 'transparent',
-        minHeight: 'calc(100vh - 64px)',
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        background: 'transparent',
+        minHeight: 0,
+        flex: 1
       }}>
-          <div style={{
-          background: 'rgba(255, 255, 255, 0.95)',
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.98)',
           backdropFilter: 'blur(10px)',
-          borderRadius: '20px',
-          padding: '32px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
+          borderRadius: '12px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+          border: '1px solid rgba(0, 0, 0, 0.06)',
           flex: 1,
-          maxWidth: '1600px',
-          margin: '0 auto',
-          width: '100%'
+          margin: '20px',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
         }}>
           {children}
         </div>
