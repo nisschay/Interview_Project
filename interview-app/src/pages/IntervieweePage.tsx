@@ -9,7 +9,8 @@ import {
   addMessage, 
   setParsedResumeData, 
   setJobDescription, 
-  setInterviewConfig 
+  setInterviewConfig,
+  setCurrentQuestion
 } from '../store/slices/interviewSlice';
 import ChatInterface from '../components/Chat/ChatInterface';
 import ResumeUploader from '../components/ResumeParser/ResumeUploader';
@@ -142,12 +143,23 @@ const IntervieweePage: React.FC = () => {
           content: response.content,
           questionNumber: 1
         }));
+        
+        // Activate timer for the question
+        dispatch(setCurrentQuestion({
+          question: response.content
+        }));
       } catch (error) {
         console.error('Error generating first question:', error);
+        const defaultQuestion = getDefaultFirstQuestion(interviewType);
         dispatch(addMessage({
           type: 'ai',
-          content: getDefaultFirstQuestion(interviewType),
+          content: defaultQuestion,
           questionNumber: 1
+        }));
+        
+        // Activate timer for the question
+        dispatch(setCurrentQuestion({
+          question: defaultQuestion
         }));
       }
     }, 2000);

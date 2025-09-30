@@ -257,7 +257,7 @@ export default function ResumeUploader({ onResult, onConfirm }: ResumeUploaderPr
                 size="middle" 
                 icon={<CheckOutlined />} 
                 onClick={handleConfirm}
-                disabled={confirmed || !parsed.name || !parsed.email || !parsed.phone}
+                disabled={confirmed || !parsed.name || !parsed.email || !parsed.phone || !parsed.age || !parsed.gender}
               >
                 {confirmed ? 'Confirmed ✓' : 'Confirm Details'}
               </Button>
@@ -274,10 +274,10 @@ export default function ResumeUploader({ onResult, onConfirm }: ResumeUploaderPr
           </Row>
 
           {/* Missing Information Alert */}
-          {!confirmed && (!parsed.name || !parsed.email || !parsed.phone) && (
+          {!confirmed && (!parsed.name || !parsed.email || !parsed.phone || !parsed.age || !parsed.gender) && (
             <Alert
               message="Missing Required Information"
-              description="Please fill in the Name, Email, and Phone fields before confirming."
+              description="Please fill in all required fields: Name, Email, Phone, Age, and Gender before confirming."
               type="warning"
               showIcon
               style={{ marginTop: '8px' }}
