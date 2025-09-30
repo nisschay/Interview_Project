@@ -3,14 +3,12 @@ import { Card, Button, Select, Typography, Space, Alert, Row, Col } from 'antd';
 import { MessageOutlined, PlayCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { useSelector, useDispatch } from 'react-redux';
 import type { RootState } from '../store/store';
-import { 
-  startInterview, 
-  addMessage, 
-  setParsedResumeData, 
-  setJobDescription, 
+import {
+  startInterview,
   setInterviewConfig,
   setCurrentQuestion,
-  setAllQuestions
+  setAllQuestions,
+  setParsedResumeData
 } from '../store/slices/interviewSlice';
 import ChatInterface from '../components/Chat/ChatInterface';
 import ResumeUploader from '../components/ResumeParser/ResumeUploader';
@@ -24,8 +22,6 @@ const IntervieweePage: React.FC = () => {
   const dispatch = useDispatch();
   const { 
     isActive, 
-    interviewType, 
-    difficulty, 
     progress, 
     messages,
     parsedResumeData
@@ -33,8 +29,8 @@ const IntervieweePage: React.FC = () => {
 
   const [resumeConfirmed, setResumeConfirmed] = useState(!!parsedResumeData);
   const [showWelcomeBack, setShowWelcomeBack] = useState(false);
-  const [selectedPosition, setSelectedPosition] = useState<string>('');
-  const [timeLimit, setTimeLimit] = useState(15); // Default 15 minutes
+  const [selectedLevel, setSelectedLevel] = useState<'junior' | 'mid' | 'senior'>('mid');
+  const [selectedRole, setSelectedRole] = useState<string>('');
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
 
   // Sync resumeConfirmed when parsedResumeData changes
@@ -53,132 +49,260 @@ const IntervieweePage: React.FC = () => {
     }
   }, []);
 
-  const predefinedPositions = {
-    'data-scientist': {
-      title: 'Data Scientist',
-      description: `We are looking for a Data Scientist to join our team:
-• 3+ years of experience in machine learning and data analysis
-• Proficiency in Python, R, SQL, and data visualization tools
-• Experience with ML frameworks (TensorFlow, PyTorch, Scikit-learn)
-• Strong statistical analysis and hypothesis testing skills
-• Experience with big data technologies (Spark, Hadoop)
-• Knowledge of cloud platforms (AWS, GCP, Azure)
-• Excellent problem-solving and communication skills`
-    },
-    'data-engineer': {
-      title: 'Data Engineer',
-      description: `We are seeking a Data Engineer with the following qualifications:
-• 4+ years of experience in data engineering and ETL processes
-• Expertise in SQL, Python, and data pipeline tools
-• Experience with data warehousing (Snowflake, Redshift, BigQuery)
-• Knowledge of streaming technologies (Kafka, Kinesis)
-• Proficiency in cloud platforms and containerization
-• Strong understanding of data modeling and architecture
-• Experience with workflow orchestration tools (Airflow, Prefect)`
-    },
-    'frontend-dev': {
-      title: 'Frontend Developer',
-      description: `We are hiring a Frontend Developer with these skills:
-• 3+ years of experience in modern frontend development
-• Expertise in React, TypeScript, and modern JavaScript
-• Experience with state management (Redux, Zustand)
-• Knowledge of CSS frameworks and responsive design
-• Familiarity with testing frameworks (Jest, Cypress)
-• Understanding of build tools and CI/CD processes
-• Strong UX/UI design sensibilities`
-    },
-    'backend-dev': {
-      title: 'Backend Developer',
-      description: `We are looking for a Backend Developer with:
-• 4+ years of experience in server-side development
-• Expertise in Node.js, Python, or Java
-• Experience with databases (PostgreSQL, MongoDB)
-• Knowledge of API design and microservices architecture
-• Understanding of cloud services and containerization
-• Experience with message queues and caching systems
-• Strong knowledge of security best practices`
-    },
-    'ai-ml-engineer': {
-      title: 'AI/ML Engineer',
-      description: `We are seeking an AI/ML Engineer with:
-• 3+ years of experience in AI/ML development and deployment
-• Expertise in machine learning frameworks and MLOps
-• Experience with deep learning and neural networks
-• Knowledge of model optimization and deployment
-• Proficiency in Python, TensorFlow, PyTorch
-• Experience with cloud ML services (AWS SageMaker, GCP AI)
-• Strong understanding of software engineering principles`
-    }
+  const roleOptions = [
+    { value: 'data-scientist', label: '🧠 Data Scientist' },
+    { value: 'data-engineer', label: '🔧 Data Engineer' },
+    { value: 'frontend-developer', label: '🎨 Frontend Developer' },
+    { value: 'backend-developer', label: '⚙️ Backend Developer' },
+    { value: 'fullstack-developer', label: '🚀 Full Stack Developer' },
+    { value: 'ai-ml-engineer', label: '🤖 AI/ML Engineer' },
+    { value: 'devops-engineer', label: '🔨 DevOps Engineer' },
+    { value: 'product-manager', label: '📊 Product Manager' },
+  ];
+
+  const levelDescriptions = {
+    junior: 'Entry-level position (0-2 years experience)',
+    mid: 'Mid-level position (2-5 years experience)',
+    senior: 'Senior-level position (5+ years experience)'
   };
 
   const handleStartInterview = async () => {
-    if (!selectedPosition || !resumeConfirmed || !parsedResumeData) {
+    if (!selectedRole || !resumeConfirmed || !parsedResumeData) {
       return;
     }
-    
-    const jobDesc = predefinedPositions[selectedPosition as keyof typeof predefinedPositions]?.description || '';
-    dispatch(setJobDescription(jobDesc));
     
     setIsGeneratingQuestions(true);
     
     try {
-      // Generate all questions upfront
-      const questions: Array<{ id: string; question: string }> = [];
+      // Define question distribution: 4 easy, 4 medium, 2 hard
+      const questionConfig = [
+        { difficulty: 'easy', count: 4, timePerQuestion: 3 },
+        { difficulty: 'medium', count: 4, timePerQuestion: 4 },
+        { difficulty: 'hard', count: 2, timePerQuestion: 5 }
+      ];
       
-      for (let i = 1; i <= progress.totalQuestions; i++) {
-        const response = await aiService.generateQuestion(
-          parsedResumeData?.rawText || null,
-          jobDesc,
-          interviewType,
-          difficulty,
-          questions.map(q => q.question),
-          i
-        );
-        
-        questions.push({
-          id: `q${i}-${Date.now()}`,
-          question: response.content
-        });
+      // Calculate total time: (4*3) + (4*4) + (2*5) = 12 + 16 + 10 = 38 minutes
+      const totalTimeMinutes = questionConfig.reduce(
+        (sum, config) => sum + (config.count * config.timePerQuestion), 
+        0
+      );
+      
+      const questions: Array<{ id: string; question: string; difficulty: string; timeLimit: number }> = [];
+      
+      // Generate questions for each difficulty level
+      for (const config of questionConfig) {
+        for (let i = 0; i < config.count; i++) {
+          const roleLabel = roleOptions.find(r => r.value === selectedRole)?.label || selectedRole;
+          const avoidedTopics = questions.map(q => q.question.substring(0, 60)).join(' | ');
+          const questionNumber = questions.length + 1;
+          
+          // Role-specific question domains with EXAMPLES
+          const roleDomains: Record<string, string> = {
+            'data-scientist': `Machine Learning & Statistics ONLY:
+- Supervised/unsupervised learning algorithms
+- Statistical analysis, hypothesis testing, A/B testing
+- Feature engineering and selection
+- Model evaluation metrics (precision, recall, F1, AUC-ROC)
+- Data preprocessing and cleaning with Python/R
+- Data visualization (matplotlib, seaborn, ggplot)
+- Exploratory Data Analysis (EDA)
+NO web development, NO APIs, NO React/frontend`,
+            'data-engineer': `Data Engineering & Pipelines ONLY:
+- ETL/ELT pipeline design and implementation
+- SQL query optimization and database design
+- Apache Spark, Hadoop, distributed systems
+- Data warehousing (Snowflake, Redshift, BigQuery)
+- Data modeling (star schema, normalization)
+- Cloud platforms (AWS S3, GCP, Azure)
+- Data quality and validation
+NO machine learning, NO web development`,
+            'frontend-developer': `Frontend Development ONLY:
+- HTML5, CSS3, JavaScript/TypeScript
+- React, Vue, Angular frameworks
+- Responsive design, CSS Grid/Flexbox
+- Browser APIs, DOM manipulation
+- Performance optimization, lazy loading
+- Accessibility (WCAG, ARIA)
+- State management, component architecture
+NO backend/databases, NO ML/data science`,
+            'backend-developer': `Backend Development ONLY:
+- Server-side programming (Node.js, Python, Java)
+- RESTful APIs, GraphQL design
+- Database design (SQL/NoSQL)
+- Authentication, authorization, security
+- Caching strategies (Redis, Memcached)
+- Microservices architecture
+- API optimization and scalability
+NO frontend frameworks, NO ML/data science`,
+            'fullstack-developer': `Full-Stack Development:
+- Frontend: React/Vue + responsive design
+- Backend: APIs, databases, authentication
+- Integration: frontend-backend communication
+- Deployment, CI/CD basics
+- Database design and optimization
+- Security best practices`,
+            'ai-ml-engineer': `AI/ML Engineering ONLY:
+- Deep learning architectures (CNNs, RNNs, Transformers)
+- Neural network training, backpropagation
+- TensorFlow, PyTorch, Keras
+- MLOps, model deployment, monitoring
+- NLP (text processing, embeddings, LLMs)
+- Computer Vision (image classification, object detection)
+- Transfer learning, fine-tuning
+NO web development, NO basic statistics`,
+            'devops-engineer': `DevOps & Infrastructure ONLY:
+- CI/CD pipelines (Jenkins, GitHub Actions)
+- Docker, Kubernetes, containerization
+- Cloud infrastructure (AWS, GCP, Azure)
+- Infrastructure as Code (Terraform, CloudFormation)
+- Monitoring, logging (Prometheus, ELK)
+- Security, compliance, automation
+NO application development, NO ML`,
+            'product-manager': `Product Management ONLY:
+- Product strategy and vision
+- User stories, requirements gathering
+- Roadmap planning and prioritization
+- Stakeholder communication
+- Metrics, KPIs, analytics
+- A/B testing, user research
+NO technical implementation`
+          };
+
+          const levelGuidance: Record<string, string> = {
+            'junior': `JUNIOR Level Requirements:
+✓ ASK: Fundamental concepts, definitions, basic tools
+✓ ASK: "What is X?", "Explain the difference between X and Y", "How does X work?"
+✓ ASK: Basic syntax, core principles, foundational knowledge
+✗ DON'T ASK: System design, architecture, scaling, optimization
+✗ DON'T ASK: Leadership, team management, strategic decisions
+✗ DON'T ASK: Complex algorithms, advanced patterns`,
+            'mid': `MID-LEVEL Requirements:
+✓ ASK: Practical implementation, real-world scenarios
+✓ ASK: "How would you implement X?", "Compare X vs Y for scenario Z"
+✓ ASK: Problem-solving, trade-offs, best practices
+✓ ASK: Component-level design, optimization basics
+✗ DON'T ASK: Only definitions (too basic)
+✗ DON'T ASK: Enterprise architecture (too advanced)
+✗ DON'T ASK: Basic syntax questions`,
+            'senior': `SENIOR Level Requirements:
+✓ ASK: System design, architecture, scalability
+✓ ASK: "Design a system that...", "How would you scale X to handle Y users?"
+✓ ASK: Leadership, mentoring, strategic technical decisions
+✓ ASK: Performance optimization, distributed systems
+✓ ASK: Trade-offs between different architectural patterns
+✗ DON'T ASK: Basic concepts or definitions
+✗ DON'T ASK: Simple implementation questions`
+          };
+          
+          const prompt = `You are an EXPERT TECHNICAL INTERVIEWER specializing in ${roleLabel.toUpperCase()} positions.
+
+🎯 GENERATE ONE UNIQUE QUESTION FOR:
+ROLE: ${selectedLevel.toUpperCase()} ${roleLabel.toUpperCase()}
+DIFFICULTY: ${config.difficulty.toUpperCase()}
+QUESTION NUMBER: ${questionNumber}/10
+
+📋 ALLOWED TOPICS (STICK TO THESE ONLY):
+${roleDomains[selectedRole]}
+
+${levelGuidance[selectedLevel]}
+
+🚫 ABSOLUTELY FORBIDDEN TOPICS:
+${selectedRole === 'data-scientist' || selectedRole === 'data-engineer' ? 
+'- NO React, Vue, Angular, frontend frameworks\n- NO HTML/CSS/JavaScript web development\n- NO RESTful APIs, web services\n- NO UI/UX, responsive design' :
+selectedRole === 'frontend-developer' || selectedRole === 'backend-developer' ?
+'- NO machine learning algorithms\n- NO data science, statistics, EDA\n- NO deep learning, neural networks\n- NO data visualization libraries' :
+'- NO topics outside the role scope'}
+
+📚 ALREADY ASKED (MUST BE COMPLETELY DIFFERENT):
+${avoidedTopics || 'None - this is question 1'}
+
+💡 DIFFICULTY LEVEL GUIDE:
+EASY = ${config.difficulty === 'easy' ? '✓ Definitions, basic concepts, "What is...?"' : '✗ Too basic'}
+MEDIUM = ${config.difficulty === 'medium' ? '✓ Implementation, "How would you...", scenarios' : config.difficulty === 'easy' ? '✗ Too complex' : '✗ Too simple'}
+HARD = ${config.difficulty === 'hard' ? '✓ System design, architecture, "Design a scalable..."' : '✗ Too advanced'}
+
+⚡ CRITICAL RULES:
+1. Question MUST be ${config.difficulty} difficulty for ${selectedLevel} ${roleLabel}
+2. Question MUST use ONLY allowed topics from the list above
+3. Question MUST be UNIQUE (different from already asked)
+4. Question MUST NOT use forbidden topics
+5. If Data Scientist/Engineer: ONLY ML/data topics, NO web dev
+6. If Frontend/Backend: ONLY web dev topics, NO ML/data science
+
+✅ GOOD EXAMPLES:
+${selectedRole === 'data-scientist' && selectedLevel === 'junior' && config.difficulty === 'easy' ? 
+'- "What is the difference between supervised and unsupervised learning?"\n- "Explain what a confusion matrix is and how to interpret it."' :
+selectedRole === 'data-scientist' && selectedLevel === 'mid' && config.difficulty === 'medium' ?
+'- "How would you handle missing data in a dataset? Explain different imputation techniques."\n- "Explain the bias-variance tradeoff and how it affects model performance."' :
+selectedRole === 'ai-ml-engineer' && selectedLevel === 'mid' && config.difficulty === 'hard' ?
+'- "Design a neural network architecture for image classification. Explain your choice of layers."\n- "How would you prevent overfitting in a deep learning model? Discuss multiple techniques."' :
+'See role-specific domains above'}
+
+❌ BAD EXAMPLES (NEVER ASK THESE):
+${selectedRole === 'data-scientist' || selectedRole === 'data-engineer' ?
+'- "What is a RESTful API?" (WEB DEV - FORBIDDEN!)\n- "How does React state management work?" (FRONTEND - FORBIDDEN!)\n- "Explain CSS flexbox" (WEB DEV - FORBIDDEN!)' :
+'- "What is a neural network?" (ML - FORBIDDEN FOR WEB DEVS!)\n- "Explain gradient descent" (DATA SCIENCE - FORBIDDEN!)'}
+
+📤 OUTPUT FORMAT:
+Return ONLY the question text. No explanations. No preamble. Just the question.`;
+
+          const response = await aiService.generateQuestion(
+            parsedResumeData?.rawText || null,
+            prompt,
+            'mixed',
+            config.difficulty as any,
+            questions.map(q => q.question),
+            questions.length + 1
+          );
+          
+          questions.push({
+            id: `q${questions.length + 1}-${Date.now()}-${Math.random()}`,
+            question: response.content,
+            difficulty: config.difficulty,
+            timeLimit: config.timePerQuestion * 60 // Convert to seconds
+          });
+        }
       }
       
-      // Store all questions in Redux
-      dispatch(setAllQuestions(questions));
+      // Shuffle questions to mix difficulties
+      const shuffledQuestions = questions.sort(() => Math.random() - 0.5);
       
-      // Start the interview with the time limit
+      // Store all questions in Redux
+      dispatch(setAllQuestions(shuffledQuestions));
+      
+      // Start the interview with calculated time limit
       dispatch(setInterviewConfig({
-        type: interviewType,
-        difficulty,
-        totalQuestions: progress.totalQuestions,
-        timeLimit
+        type: 'mixed',
+        difficulty: selectedLevel,
+        totalQuestions: 10,
+        timeLimit: totalTimeMinutes
       }));
       
       dispatch(startInterview());
       
-      // Add welcome message
-      dispatch(addMessage({
-        type: 'ai',
-        content: `🎯 **Welcome to your ${interviewType} interview!**\n\nYou have ${timeLimit} minutes to answer ${progress.totalQuestions} questions.\n\n${parsedResumeData ? `I've analyzed your resume and generated personalized questions. ` : ''}You can see all questions in the sidebar and navigate between them.\n\n**Good luck!**`
-      }));
+      // Don't add welcome message in chat - it's in the sidebar now
       
       // Set the first question as current
-      if (questions.length > 0) {
+      if (shuffledQuestions.length > 0) {
         dispatch(setCurrentQuestion({
-          question: questions[0].question
+          question: shuffledQuestions[0].question
         }));
       }
       
     } catch (error) {
       console.error('Error generating questions:', error);
       // Fallback to default questions
-      const fallbackQuestions = getFallbackQuestions(interviewType, progress.totalQuestions);
+      const fallbackQuestions = getFallbackQuestions('mixed', 10);
       dispatch(setAllQuestions(fallbackQuestions));
       
-      dispatch(startInterview());
-      
-      dispatch(addMessage({
-        type: 'ai',
-        content: `🎯 **Welcome to your ${interviewType} interview!**\n\nYou have ${timeLimit} minutes to answer ${progress.totalQuestions} questions.\n\nYou can see all questions in the sidebar and navigate between them.\n\n**Good luck!**`
+      dispatch(setInterviewConfig({
+        type: 'mixed',
+        difficulty: selectedLevel,
+        totalQuestions: 10,
+        timeLimit: 38
       }));
+      
+      dispatch(startInterview());
       
       if (fallbackQuestions.length > 0) {
         dispatch(setCurrentQuestion({
@@ -190,7 +314,7 @@ const IntervieweePage: React.FC = () => {
     }
   };
 
-  const getFallbackQuestions = (type: string, count: number): Array<{ id: string; question: string }> => {
+  const getFallbackQuestions = (type: string, count: number): Array<{ id: string; question: string; difficulty: string; timeLimit: number }> => {
     const fallbacks = {
       technical: [
         "Can you explain your experience with JavaScript and any frameworks you've used?",
@@ -233,23 +357,13 @@ const IntervieweePage: React.FC = () => {
     const questionList = fallbacks[type as keyof typeof fallbacks] || fallbacks.technical;
     return questionList.slice(0, count).map((q, i) => ({
       id: `fallback-${i + 1}`,
-      question: q
+      question: q,
+      difficulty: i < 4 ? 'easy' : i < 8 ? 'medium' : 'hard',
+      timeLimit: i < 4 ? 180 : i < 8 ? 240 : 300
     }));
   };
 
-  const handleConfigChange = (field: string, value: any) => {
-    const config = {
-      type: interviewType,
-      difficulty,
-      totalQuestions: progress.totalQuestions
-    };
-    
-    if (field === 'type') config.type = value;
-    if (field === 'difficulty') config.difficulty = value;
-    if (field === 'totalQuestions') config.totalQuestions = value;
-    
-    dispatch(setInterviewConfig(config));
-  };
+  // No longer needed - config is set automatically based on selections
 
   const handleResumeConfirm = (data: ParsedResumeData) => {
     console.log('✅ handleResumeConfirm called with:', data);
@@ -261,18 +375,19 @@ const IntervieweePage: React.FC = () => {
     });
   };
 
-  const canStart = selectedPosition && resumeConfirmed && parsedResumeData;
+  const canStart = selectedRole && resumeConfirmed && parsedResumeData;
   
   // Debug logging
   useEffect(() => {
     console.log('🔍 State check:', {
-      selectedPosition,
+      selectedRole,
+      selectedLevel,
       resumeConfirmed,
       hasParseData: !!parsedResumeData,
       parsedResumeDataName: parsedResumeData?.name,
       canStart
     });
-  }, [selectedPosition, resumeConfirmed, parsedResumeData, canStart]);
+  }, [selectedRole, selectedLevel, resumeConfirmed, parsedResumeData, canStart]);
 
   // Active Interview Interface
   if (isActive) {
@@ -375,15 +490,15 @@ const IntervieweePage: React.FC = () => {
         />
       )}
 
-      {/* Configuration Grid */}
+      {/* Configuration Grid - Landscape Layout */}
       <Row gutter={24} justify="center">
-        {/* Interview Settings */}
-        <Col xs={24} lg={8}>
+        {/* Combined Position & Level Selection */}
+        <Col xs={24} lg={12}>
           <Card 
-            title="🎯 Interview Configuration" 
+            title="💼 Position & Experience Level" 
             hoverable
             style={{ 
-              minHeight: '460px', 
+              minHeight: '350px', 
               marginBottom: '16px',
               borderRadius: '16px',
               border: '2px solid #f0f0f0',
@@ -394,89 +509,83 @@ const IntervieweePage: React.FC = () => {
           >
             <Space direction="vertical" style={{ width: '100%' }} size="large">
               <div>
-                <Text strong style={{ display: 'block', marginBottom: '8px' }}>Interview Type</Text>
+                <Text strong style={{ display: 'block', marginBottom: '12px' }}>Experience Level</Text>
                 <Select
-                  value={interviewType}
-                  onChange={(value) => handleConfigChange('type', value)}
+                  value={selectedLevel}
+                  onChange={setSelectedLevel}
                   style={{ width: '100%' }}
                   size="large"
                 >
-                  <Option value="technical">🔧 Technical Interview</Option>
-                  <Option value="behavioral">🧠 Behavioral Interview</Option>
-                  <Option value="mixed">🎯 Mixed Interview</Option>
+                  <Option value="junior">🌱 Junior (0-2 years)</Option>
+                  <Option value="mid">🚀 Mid-Level (2-5 years)</Option>
+                  <Option value="senior">👑 Senior (5+ years)</Option>
                 </Select>
                 <Text type="secondary" style={{ fontSize: '12px', marginTop: '4px', display: 'block' }}>
-                  {interviewType === 'technical' && 'Focus on programming skills and technical knowledge'}
-                  {interviewType === 'behavioral' && 'Focus on soft skills and past experiences'}
-                  {interviewType === 'mixed' && 'Combination of technical and behavioral questions'}
+                  {levelDescriptions[selectedLevel]}
                 </Text>
               </div>
               
               <div>
-                <Text strong style={{ display: 'block', marginBottom: '8px' }}>Difficulty Level</Text>
+                <Text strong style={{ display: 'block', marginBottom: '12px' }}>Role/Position</Text>
                 <Select
-                  value={difficulty}
-                  onChange={(value) => handleConfigChange('difficulty', value)}
+                  value={selectedRole}
+                  onChange={setSelectedRole}
+                  placeholder="Select your target role"
                   style={{ width: '100%' }}
                   size="large"
+                  showSearch
+                  filterOption={(input, option) => {
+                    const children = option?.children;
+                    if (Array.isArray(children)) {
+                      const text = children.join('');
+                      return text.toLowerCase().includes(input.toLowerCase());
+                    }
+                    return String(children || '').toLowerCase().includes(input.toLowerCase());
+                  }}
                 >
-                  <Option value="junior">🌱 Junior Level</Option>
-                  <Option value="mid">🚀 Mid Level</Option>
-                  <Option value="senior">👑 Senior Level</Option>
-                </Select>
-                <Text type="secondary" style={{ fontSize: '12px', marginTop: '4px', display: 'block' }}>
-                  {difficulty === 'junior' && 'Entry-level questions, 20s per question'}
-                  {difficulty === 'mid' && 'Intermediate questions, 60s per question'}
-                  {difficulty === 'senior' && 'Advanced questions, 120s per question'}
-                </Text>
-              </div>
-              
-              <div>
-                <Text strong style={{ display: 'block', marginBottom: '8px' }}>Number of Questions</Text>
-                <Select
-                  value={progress.totalQuestions}
-                  onChange={(value) => handleConfigChange('totalQuestions', value)}
-                  style={{ width: '100%' }}
-                  size="large"
-                >
-                  <Option value={5}>5 Questions</Option>
-                  <Option value={10}>10 Questions</Option>
-                  <Option value={15}>15 Questions</Option>
-                  <Option value={20}>20 Questions</Option>
+                  {roleOptions.map(role => (
+                    <Option key={role.value} value={role.value}>
+                      {role.label}
+                    </Option>
+                  ))}
                 </Select>
               </div>
               
-              <div>
-                <Text strong style={{ display: 'block', marginBottom: '8px' }}>Interview Time Limit</Text>
-                <Select
-                  value={timeLimit}
-                  onChange={(value) => setTimeLimit(value)}
-                  style={{ width: '100%' }}
-                  size="large"
-                >
-                  <Option value={5}>5 minutes (Quick test)</Option>
-                  <Option value={10}>10 minutes</Option>
-                  <Option value={15}>15 minutes (Recommended)</Option>
-                  <Option value={20}>20 minutes</Option>
-                  <Option value={30}>30 minutes</Option>
-                  <Option value={45}>45 minutes</Option>
-                  <Option value={60}>60 minutes</Option>
-                </Select>
-                <Text type="secondary" style={{ fontSize: '12px', marginTop: '4px', display: 'block' }}>
-                  Total time for all questions
-                </Text>
-              </div>
+              {selectedRole && selectedLevel && (
+                <Alert
+                  message="Interview Configuration"
+                  description={
+                    <div>
+                      <Text>You will be interviewed for:</Text>
+                      <br />
+                      <Text strong style={{ fontSize: '15px' }}>
+                        {selectedLevel.charAt(0).toUpperCase() + selectedLevel.slice(1)} {roleOptions.find(r => r.value === selectedRole)?.label}
+                      </Text>
+                      <br />
+                      <br />
+                      <Text type="secondary" style={{ fontSize: '12px' }}>
+                        • 10 Mixed Questions (Technical + Behavioral)<br />
+                        • 4 Easy (3 min each), 4 Medium (4 min each), 2 Hard (5 min each)<br />
+                        • Total Time: 38 minutes
+                      </Text>
+                    </div>
+                  }
+                  type="info"
+                  showIcon
+                  icon={<MessageOutlined />}
+                />
+              )}
             </Space>
           </Card>
         </Col>
 
         {/* Resume Upload */}
-        <Col xs={24} lg={8}>
+        <Col xs={24} lg={12}>
           <Card 
-            title="📄 Resume Upload (Required)" 
+            title="� Resume Upload (Required)" 
             hoverable
             style={{ 
-              minHeight: '460px', 
+              minHeight: '350px', 
               marginBottom: '16px',
               borderRadius: '16px',
               border: '2px solid #f0f0f0',
@@ -498,66 +607,16 @@ const IntervieweePage: React.FC = () => {
             />
           </Card>
         </Col>
-
-        {/* Position Selection */}
-        <Col xs={24} lg={8}>
-          <Card 
-            title="💼 Select Position" 
-            hoverable
-            style={{ 
-              minHeight: '460px', 
-              marginBottom: '16px',
-              borderRadius: '16px',
-              border: '2px solid #f0f0f0',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-              transition: 'all 0.3s ease'
-            }}
-            headStyle={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', borderRadius: '14px 14px 0 0', fontSize: '16px' }}
-          >
-            <Space direction="vertical" style={{ width: '100%' }} size="large">
-              <div>
-                <Text strong style={{ display: 'block', marginBottom: '12px' }}>Choose the position you're applying for:</Text>
-                <Select
-                  value={selectedPosition}
-                  onChange={setSelectedPosition}
-                  placeholder="Select a position"
-                  style={{ width: '100%' }}
-                  size="large"
-                >
-                  <Option value="data-scientist">🧠 Data Scientist</Option>
-                  <Option value="data-engineer">🔧 Data Engineer</Option>
-                  <Option value="frontend-dev">🎨 Frontend Developer</Option>
-                  <Option value="backend-dev">⚙️ Backend Developer</Option>
-                  <Option value="ai-ml-engineer">🤖 AI/ML Engineer</Option>
-                </Select>
-              </div>
-              
-              {selectedPosition && (
-                <div>
-                  <Text strong style={{ display: 'block', marginBottom: '8px' }}>Position Details:</Text>
-                  <Card size="small" style={{ backgroundColor: '#f8f9fa' }}>
-                    <Title level={5} style={{ margin: '0 0 12px 0' }}>
-                      {predefinedPositions[selectedPosition as keyof typeof predefinedPositions]?.title}
-                    </Title>
-                    <Text style={{ fontSize: '13px', lineHeight: '1.6', whiteSpace: 'pre-line' }}>
-                      {predefinedPositions[selectedPosition as keyof typeof predefinedPositions]?.description}
-                    </Text>
-                  </Card>
-                </div>
-              )}
-            </Space>
-          </Card>
-        </Col>
       </Row>
 
       {/* Validation Messages */}
       <Row justify="center">
         <Col xs={24} lg={16}>
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
-            {!selectedPosition && (
+            {!selectedRole && (
               <Alert
-                message="Position selection is required"
-                description="Please select the position you're applying for to generate relevant interview questions."
+                message="Role selection is required"
+                description="Please select the role you're applying for to generate relevant interview questions."
                 type="warning"
                 showIcon
               />
@@ -582,7 +641,7 @@ const IntervieweePage: React.FC = () => {
             )}
             
             {/* Success message when all requirements are met */}
-            {selectedPosition && parsedResumeData && resumeConfirmed && (
+            {selectedRole && parsedResumeData && resumeConfirmed && (
               <Alert
                 message="All requirements completed!"
                 description="You're all set. Click the button below to start your interview."

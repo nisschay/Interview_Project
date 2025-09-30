@@ -5,7 +5,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import type { RootState } from '../../store/store';
 import { 
   addMessage, 
-  updateQuestionScore,
+  setMessages,
   endInterview,
   updateOverallTimer,
   navigateToQuestion,
@@ -21,15 +21,12 @@ const ChatInterface: React.FC = () => {
   const dispatch = useDispatch();
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [isEvaluating, setIsEvaluating] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<number | null>(null);
   
   const { 
     messages, 
     progress, 
-    interviewType, 
-    difficulty,
     currentQuestionNumber,
     allQuestions,
     overallTimer
@@ -72,88 +69,140 @@ const ChatInterface: React.FC = () => {
     
     if (!currentQ) return;
     
-    // Add user message
-    const userMessage = {
-      type: 'user' as const,
-      content: userAnswer,
-      questionNumber: currentQuestionNumber
-    };
-    dispatch(addMessage(userMessage));
+    // Check if editing existing answer
+    const existingMessageIndex = messages.findIndex(
+      m => m.type === 'user' && m.questionNumber === currentQuestionNumber
+    );
+
+    if (existingMessageIndex >= 0) {
+      // Update existing message (edit)
+      const updatedMessages = [...messages];
+      updatedMessages[existingMessageIndex] = {
+        ...updatedMessages[existingMessageIndex],
+        content: userAnswer,
+        timestamp: new Date()
+      };
+      dispatch(setMessages(updatedMessages));
+      message.success(`Answer updated for Question ${currentQuestionNumber}`);
+    } else {
+      // Add new message
+      const userMessage = {
+        type: 'user' as const,
+        content: userAnswer,
+        questionNumber: currentQuestionNumber
+      };
+      dispatch(addMessage(userMessage));
+      message.success(`Answer saved for Question ${currentQuestionNumber}`);
+    }
 
     setInputValue('');
-    setIsEvaluating(true);
 
-    try {
-      // Evaluate the answer
-      const evaluation = await aiService.evaluateAnswer(
-        currentQ.question,
-        userAnswer,
-        currentQuestionNumber,
-        difficulty
-      );
-
-      // Update the question with answer and score
-      dispatch(updateQuestionAnswer({
-        questionId: currentQ.id,
-        answer: userAnswer,
-        score: evaluation.score
-      }));
-
-      // Update overall score
-      dispatch(updateQuestionScore({
-        questionId: Date.now().toString(),
-        score: evaluation.score
-      }));
-
-      // Add AI feedback
-      const feedbackMessage = `**Score: ${evaluation.score}/100**\n\n${evaluation.feedback}\n\n**Strengths:**\n${evaluation.strengths.map(s => `• ${s}`).join('\n')}\n\n**Suggestions:**\n${evaluation.suggestions.map(s => `• ${s}`).join('\n')}`;
-      
-      dispatch(addMessage({
-        type: 'ai',
-        content: feedbackMessage,
-        score: evaluation.score
-      }));
-
-      message.success(`Question ${currentQuestionNumber} answered! Score: ${evaluation.score}/100`);
-      
-    } catch (error) {
-      console.error('Error evaluating answer:', error);
-      message.error('Failed to evaluate answer. Please try again.');
-    } finally {
-      setIsEvaluating(false);
-    }
+    // Store answer in question object
+    dispatch(updateQuestionAnswer({
+      questionId: currentQ.id,
+      answer: userAnswer
+    }));
   };
 
   const endInterviewWithSummary = async () => {
     setIsTyping(true);
+    message.info('Evaluating all your answers... This may take a moment.');
     
     try {
-      const summary = await aiService.generateFinalSummary(
-        messages,
-        { name: 'Candidate' },
-        { type: interviewType, difficulty }
-      );
+      let totalScore = 0;
+      const maxScore = (4 * 1) + (4 * 3) + (2 * 5); // 4 easy + 4 medium + 2 hard = 26 points max
+      const evaluatedQuestions: any[] = [];
+
+      // Evaluate each answered question
+      for (const question of allQuestions) {
+        if (question.answer) {
+          try {
+            // Get AI evaluation
+            const evaluation = await aiService.evaluateAnswer(
+              question.question,
+              question.answer,
+              allQuestions.indexOf(question) + 1
+            );
+
+            // Calculate score based on difficulty
+            const maxPoints = question.difficulty === 'hard' ? 5 : question.difficulty === 'medium' ? 3 : 1;
+            let earnedPoints = 0;
+            
+            // Score based on evaluation quality
+            if (evaluation.score >= 90) {
+              earnedPoints = maxPoints; // 100% correct - full marks
+            } else if (evaluation.score >= 60) {
+              earnedPoints = maxPoints / 2; // Mostly correct - half marks
+            } else if (evaluation.score >= 30) {
+              earnedPoints = maxPoints / 4; // Partially correct - quarter marks
+            }
+            // else 0 points for very poor answers
+
+            totalScore += earnedPoints;
+
+            evaluatedQuestions.push({
+              question: question.question,
+              answer: question.answer,
+              difficulty: question.difficulty,
+              evaluation: evaluation.feedback,
+              earnedPoints,
+              maxPoints
+            });
+
+            // Update question with score
+            dispatch(updateQuestionAnswer({
+              questionId: question.id,
+              answer: question.answer,
+              score: Math.round((earnedPoints / maxPoints) * 100)
+            }));
+          } catch (error) {
+            console.error('Error evaluating question:', error);
+          }
+        }
+      }
+
+      // Calculate percentage
+      const percentageScore = Math.round((totalScore / maxScore) * 100);
 
       dispatch(endInterview({
-        finalScore: summary.overallScore,
-        summary: summary.summary
+        finalScore: percentageScore,
+        summary: `Evaluated ${evaluatedQuestions.length} questions. Total score: ${totalScore}/${maxScore} points.`
       }));
 
-      const finalMessage = `🎉 **Interview Complete!**\n\n**Final Score: ${summary.overallScore}/100**\n\n**Summary:**\n${summary.summary}\n\n**Key Strengths:**\n${summary.strengths.map(s => `• ${s}`).join('\n')}\n\n**Areas for Improvement:**\n${summary.improvements.map(i => `• ${i}`).join('\n')}\n\n**Recommendation:** ${summary.recommendation}`;
+      // Build detailed results message
+      let resultsMessage = `🎉 **Interview Complete!**\n\n**Final Score: ${percentageScore}/100** (${totalScore}/${maxScore} points)\n\n`;
+      
+      resultsMessage += `**Question Breakdown:**\n`;
+      evaluatedQuestions.forEach((eq, idx) => {
+        const diffEmoji = eq.difficulty === 'easy' ? '🟢' : eq.difficulty === 'medium' ? '🟡' : '🔴';
+        resultsMessage += `\n${diffEmoji} Q${idx + 1} (${eq.difficulty}): ${eq.earnedPoints}/${eq.maxPoints} points\n`;
+        resultsMessage += `${eq.evaluation}\n`;
+      });
+
+      resultsMessage += `\n\n**Performance Summary:**\n`;
+      if (percentageScore >= 80) {
+        resultsMessage += `✅ Excellent! You demonstrated strong knowledge and skills.`;
+      } else if (percentageScore >= 60) {
+        resultsMessage += `✓ Good performance with room for improvement.`;
+      } else if (percentageScore >= 40) {
+        resultsMessage += `⚠️ Fair attempt. Consider reviewing key concepts.`;
+      } else {
+        resultsMessage += `❌ Needs improvement. Focus on fundamental concepts.`;
+      }
 
       dispatch(addMessage({
         type: 'ai',
-        content: finalMessage
+        content: resultsMessage
       }));
 
-      message.success('Interview completed! Check the Interviewer Dashboard for detailed results.');
+      message.success('Interview evaluation completed!');
     } catch (error) {
       console.error('Error generating summary:', error);
       dispatch(endInterview({}));
       
       dispatch(addMessage({
         type: 'ai',
-        content: '🎉 **Interview Complete!**\n\nThank you for participating in this interview. Your responses have been recorded and will be reviewed.'
+        content: '🎉 **Interview Complete!**\n\nThank you for participating in this interview. Your responses have been recorded.'
       }));
     }
     
@@ -169,6 +218,22 @@ const ChatInterface: React.FC = () => {
   
   const handleQuestionClick = (questionIndex: number) => {
     dispatch(navigateToQuestion(questionIndex + 1));
+    
+    // Load existing answer into input if available
+    const question = allQuestions[questionIndex];
+    if (question?.answer) {
+      setInputValue(question.answer);
+    } else {
+      setInputValue('');
+    }
+  };
+  
+  const handleEditAnswer = () => {
+    const currentQ = allQuestions[currentQuestionNumber - 1];
+    if (currentQ?.answer) {
+      setInputValue(currentQ.answer);
+      message.info('Edit your answer and click Send to update');
+    }
   };
   
   const handleEndInterview = () => {
@@ -185,13 +250,14 @@ const ChatInterface: React.FC = () => {
     <div style={{ display: 'flex', gap: '16px', height: '100%' }}>
       {/* Questions Sidebar */}
       <Card 
-        title={<span><ClockCircleOutlined /> All Questions</span>}
-        style={{ width: '300px', height: '100%', overflow: 'auto' }}
+        title={<span><ClockCircleOutlined /> Interview Status</span>}
+        style={{ width: '320px', height: '100%', overflow: 'auto' }}
         bodyStyle={{ padding: '12px' }}
       >
         <Space direction="vertical" style={{ width: '100%' }} size="small">
-          <div style={{ marginBottom: '12px', padding: '8px', background: '#f0f2f5', borderRadius: '8px' }}>
-            <Text strong style={{ display: 'block', marginBottom: '4px' }}>Time Remaining</Text>
+          {/* Time Remaining */}
+          <div style={{ marginBottom: '12px', padding: '12px', background: '#f0f2f5', borderRadius: '8px' }}>
+            <Text strong style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>Time Remaining</Text>
             <Text style={{ 
               fontSize: '24px', 
               fontWeight: 'bold',
@@ -200,10 +266,44 @@ const ChatInterface: React.FC = () => {
               {formatTimeRemaining(overallTimer.timeRemaining)}
             </Text>
           </div>
+
+          {/* AI Interviewer Message */}
+          <div style={{ 
+            marginBottom: '16px', 
+            padding: '12px', 
+            background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+            borderRadius: '8px',
+            border: '1px solid rgba(102, 126, 234, 0.2)'
+          }}>
+            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              <Text strong style={{ fontSize: '13px', color: '#667eea' }}>
+                <RobotOutlined /> AI Interviewer
+              </Text>
+              <Text style={{ fontSize: '12px', lineHeight: '1.5' }}>
+                You have 38 minutes for 10 questions:
+              </Text>
+              <Text style={{ fontSize: '11px', color: '#666' }}>
+                • 4 Easy (3 min each)<br />
+                • 4 Medium (4 min each)<br />
+                • 2 Hard (5 min each)
+              </Text>
+              <Text style={{ fontSize: '11px', marginTop: '4px', display: 'block', fontStyle: 'italic' }}>
+                💡 Navigate questions using the list below. Good luck!
+              </Text>
+            </Space>
+          </div>
+
+          <div style={{ borderTop: '1px solid #e0e0e0', paddingTop: '12px' }}>
+            <Text strong style={{ display: 'block', marginBottom: '8px', fontSize: '13px' }}>
+              All Questions
+            </Text>
+          </div>
           
           {allQuestions.map((q, index) => {
             const isAnswered = !!q.answer;
             const isCurrent = index + 1 === currentQuestionNumber;
+            const difficultyColor = q.difficulty === 'easy' ? '#52c41a' : q.difficulty === 'medium' ? '#faad14' : '#ff4d4f';
+            const difficultyLabel = q.difficulty === 'easy' ? 'Easy' : q.difficulty === 'medium' ? 'Med' : 'Hard';
             
             return (
               <Card
@@ -221,13 +321,16 @@ const ChatInterface: React.FC = () => {
                 <Space direction="vertical" style={{ width: '100%' }} size={4}>
                   <Space>
                     <Text strong>Q{index + 1}</Text>
+                    <Tag color={difficultyColor} style={{ fontSize: '10px', padding: '0 6px' }}>
+                      {difficultyLabel}
+                    </Tag>
                     {isAnswered && <CheckCircleOutlined style={{ color: '#52c41a' }} />}
                     {isCurrent && <EditOutlined style={{ color: '#667eea' }} />}
                   </Space>
-                  {isAnswered && q.score !== undefined && (
-                    <Tag color={q.score >= 70 ? 'success' : q.score >= 40 ? 'warning' : 'error'}>
-                      Score: {q.score}/100
-                    </Tag>
+                  {q.timeLimit && (
+                    <Text type="secondary" style={{ fontSize: '11px' }}>
+                      ⏱️ {Math.floor(q.timeLimit / 60)} min
+                    </Text>
                   )}
                 </Space>
               </Card>
@@ -310,17 +413,19 @@ const ChatInterface: React.FC = () => {
           overflow: 'auto',
           minHeight: 0
         }}>
-          {messages.length === 0 ? (
+          {messages.filter(m => !m.questionNumber || m.questionNumber === currentQuestionNumber).length === 0 ? (
             <div style={{ textAlign: 'center', padding: 40 }}>
-              <RobotOutlined style={{ fontSize: 48, color: '#1890ff', marginBottom: 16 }} />
-              <Title level={4}>Welcome to your AI Interview!</Title>
+              <RobotOutlined style={{ fontSize: 48, color: '#667eea', marginBottom: 16 }} />
+              <Title level={4} style={{ color: '#667eea' }}>Question {currentQuestionNumber}</Title>
               <Text type="secondary">
-                You have {overallTimer.totalMinutes} minutes for {progress.totalQuestions} questions. Answer them in any order using the sidebar!
+                Type your answer below and click Send when ready.
               </Text>
             </div>
           ) : (
             <List
-              dataSource={messages}
+              dataSource={messages.filter(m => 
+                !m.questionNumber || m.questionNumber === currentQuestionNumber
+              )}
               renderItem={(message: Message) => (
                 <List.Item style={{ border: 'none', padding: '8px 0' }}>
                   <List.Item.Meta
@@ -376,7 +481,7 @@ const ChatInterface: React.FC = () => {
             />
           )}
           
-          {(isTyping || isEvaluating) && (
+          {isTyping && (
             <div style={{ padding: '8px 0' }}>
               <List.Item style={{ border: 'none' }}>
                 <List.Item.Meta
@@ -393,7 +498,7 @@ const ChatInterface: React.FC = () => {
                       <Space>
                         <Spin size="small" style={{ color: '#667eea' }} />
                         <Text type="secondary" style={{ fontSize: '15px' }}>
-                          {isEvaluating ? 'Evaluating your answer...' : 'Processing...'}
+                          Evaluating all answers...
                         </Text>
                       </Space>
                     </div>
@@ -412,6 +517,33 @@ const ChatInterface: React.FC = () => {
           background: 'linear-gradient(135deg, #fafbff 0%, #f8fafc 100%)',
           borderRadius: '0 0 16px 16px'
         }}>
+          {/* Show current answer and edit button if question is already answered */}
+          {allQuestions[currentQuestionNumber - 1]?.answer && (
+            <div style={{ marginBottom: '12px' }}>
+              <Space>
+                <Text type="secondary">Current Answer:</Text>
+                <Button
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={handleEditAnswer}
+                  type="link"
+                >
+                  Edit Answer
+                </Button>
+              </Space>
+              <div style={{
+                padding: '12px',
+                background: '#f0fdf4',
+                borderRadius: '8px',
+                marginTop: '8px',
+                border: '1px solid #86efac',
+                fontSize: '14px'
+              }}>
+                {allQuestions[currentQuestionNumber - 1].answer}
+              </div>
+            </div>
+          )}
+          
           <Space.Compact style={{ width: '100%' }}>
             <TextArea
               value={inputValue}
@@ -426,13 +558,13 @@ const ChatInterface: React.FC = () => {
                 fontSize: '15px',
                 padding: '12px 16px'
               }}
-              disabled={isTyping || isEvaluating}
+              disabled={isTyping}
             />
             <Button
               type="primary"
               icon={<SendOutlined />}
               onClick={() => handleSendMessage()}
-              disabled={!inputValue.trim() || isTyping || isEvaluating}
+              disabled={!inputValue.trim() || isTyping}
               size="large"
               style={{
                 borderRadius: '0 12px 12px 0',

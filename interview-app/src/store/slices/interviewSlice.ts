@@ -8,7 +8,7 @@ export interface InterviewState {
   messages: Message[];
   currentQuestion: string | null;
   currentQuestionNumber: number;
-  allQuestions: Array<{ id: string; question: string; answer?: string; score?: number; }>;
+  allQuestions: Array<{ id: string; question: string; answer?: string; score?: number; difficulty?: string; timeLimit?: number; }>;
   resumeContent: string | null;
   parsedResumeData: ParsedResumeData | null;
   jobDescription: string | null;
@@ -40,11 +40,11 @@ const initialState: InterviewState = {
   resumeContent: null,
   parsedResumeData: null,
   jobDescription: null,
-  interviewType: 'technical',
+  interviewType: 'mixed',
   difficulty: 'mid',
   progress: {
     questionsAsked: 0,
-    totalQuestions: 5,
+    totalQuestions: 10,
     currentScore: 0,
     averageScore: 0,
     isCompleted: false,
@@ -140,6 +140,10 @@ const interviewSlice = createSlice({
         timestamp: new Date(),
       };
       state.messages.push(newMessage);
+    },
+    
+    setMessages: (state, action: PayloadAction<Message[]>) => {
+      state.messages = action.payload;
     },
     
     setCurrentQuestion: (state, action: PayloadAction<{ question: string; timeLimit?: number }>) => {
@@ -268,6 +272,7 @@ export const {
   resumeInterview,
   endInterview,
   addMessage,
+  setMessages,
   setCurrentQuestion,
   updateTimer,
   setResumeContent,

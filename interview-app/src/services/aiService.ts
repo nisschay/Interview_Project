@@ -47,10 +47,10 @@ class GeminiAIService {
         parts: [{ text: prompt }]
       }],
       generationConfig: {
-        temperature: 0.7,
-        topK: 32,
+        temperature: 0.9 + (Math.random() * 0.2), // 0.9-1.1 for more variety
+        topK: 40,
         topP: 0.95,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 2048,
       }
     };
 
@@ -88,54 +88,103 @@ class GeminiAIService {
   }
 
   private getMockResponse(prompt: string): string {
-    if (prompt.toLowerCase().includes('technical') || prompt.toLowerCase().includes('question')) {
-      const technicalQuestions = [
-        "What is the difference between `let`, `const`, and `var` in JavaScript? Can you provide examples of when you'd use each?",
-        "Explain the concept of closures in JavaScript. How would you use them to create a private variable?",
-        "How would you optimize a React application for better performance? Name at least 3 techniques.",
-        "What are the differences between SQL and NoSQL databases? When would you choose one over the other?",
-        "Explain the concept of RESTful APIs. What are the main HTTP methods and their purposes?",
-        "How do you handle state management in large React applications? Compare Redux vs Context API.",
-        "What is the difference between synchronous and asynchronous programming? How do promises work?",
-        "Explain Big O notation. What's the time complexity of common array operations?",
-        "How would you implement user authentication in a web application? What security measures would you include?",
-        "What are the principles of clean code? How do you ensure code maintainability?"
+    // Role-aware fallback questions
+    if (prompt.toLowerCase().includes('data scientist') || prompt.toLowerCase().includes('data-scientist')) {
+      const dataScientistQuestions = [
+        "What is the difference between supervised and unsupervised learning?",
+        "Explain what a confusion matrix is and how you interpret precision, recall, and F1-score.",
+        "How would you handle missing data in a dataset? Explain different imputation techniques.",
+        "What is overfitting and how can you prevent it in machine learning models?",
+        "Explain the bias-variance tradeoff in machine learning.",
+        "How do you evaluate the performance of a classification model?",
+        "What is the difference between bagging and boosting ensemble methods?",
+        "Explain feature engineering and why it's important in machine learning."
       ];
-      return technicalQuestions[Math.floor(Math.random() * technicalQuestions.length)];
+      return dataScientistQuestions[Math.floor(Math.random() * dataScientistQuestions.length)];
     }
     
-    if (prompt.toLowerCase().includes('behavioral')) {
-      const behavioralQuestions = [
-        "Tell me about a challenging project you worked on. How did you overcome the difficulties?",
-        "Describe a time when you had to work with a difficult team member. How did you handle the situation?",
-        "How do you prioritize your work when you have multiple deadlines?",
-        "Tell me about a time you made a mistake in your code. How did you handle it?",
-        "Describe your experience with code reviews. How do you give and receive feedback?",
-        "How do you stay updated with new technologies and programming trends?",
-        "Tell me about a time you had to learn a new technology quickly for a project.",
-        "How do you approach debugging a complex issue?",
-        "Describe your ideal work environment and team dynamics.",
-        "What motivates you as a software developer?"
+    if (prompt.toLowerCase().includes('data engineer') || prompt.toLowerCase().includes('data-engineer')) {
+      const dataEngineerQuestions = [
+        "What is the difference between ETL and ELT processes?",
+        "How would you design a data pipeline for processing large-scale data?",
+        "Explain the concept of data partitioning and when you would use it.",
+        "What are the differences between OLTP and OLAP databases?",
+        "How do you ensure data quality in a data pipeline?",
+        "Explain star schema vs snowflake schema in data warehousing.",
+        "What is Apache Spark and how does it differ from Hadoop MapReduce?",
+        "How would you optimize a slow SQL query?"
       ];
-      return behavioralQuestions[Math.floor(Math.random() * behavioralQuestions.length)];
+      return dataEngineerQuestions[Math.floor(Math.random() * dataEngineerQuestions.length)];
     }
     
-    if (prompt.toLowerCase().includes('evaluate') || prompt.toLowerCase().includes('score')) {
-      const evaluations = [
-        "Score: 85\nFeedback: Excellent answer! You demonstrated solid understanding of the concept with clear explanations and good examples. Your knowledge of best practices is evident.\nSuggestions:\n- Consider mentioning edge cases\n- Could elaborate on performance implications\n- Adding real-world examples would strengthen the answer",
-        
-        "Score: 78\nFeedback: Good response showing understanding of core concepts. You explained the basics well and showed practical knowledge.\nSuggestions:\n- Provide more specific technical details\n- Include examples of implementation\n- Discuss potential pitfalls or common mistakes",
-        
-        "Score: 92\nFeedback: Outstanding answer! Comprehensive understanding with excellent practical examples. You covered multiple aspects and showed deep technical knowledge.\nSuggestions:\n- Perhaps mention alternative approaches\n- Could discuss scalability considerations\n- Testing strategies would add value",
-        
-        "Score: 65\nFeedback: Basic understanding demonstrated, but could be more thorough. The explanation covers fundamental concepts but lacks depth.\nSuggestions:\n- Provide more detailed explanations\n- Include concrete examples\n- Research advanced features of this topic",
-        
-        "Score: 88\nFeedback: Very good answer with strong technical foundation. Clear explanations and practical insights show good experience.\nSuggestions:\n- Could explore more advanced concepts\n- Mention industry best practices\n- Discuss debugging or troubleshooting approaches"
+    if (prompt.toLowerCase().includes('ai') || prompt.toLowerCase().includes('ml engineer')) {
+      const aiMlQuestions = [
+        "Explain the architecture of a Convolutional Neural Network (CNN).",
+        "What is transfer learning and when would you use it?",
+        "How does backpropagation work in neural networks?",
+        "Explain the difference between RNNs and LSTMs.",
+        "What is the vanishing gradient problem and how do you solve it?",
+        "How would you deploy a machine learning model to production?",
+        "Explain attention mechanisms in transformer models.",
+        "What is the difference between batch normalization and layer normalization?"
       ];
-      return evaluations[Math.floor(Math.random() * evaluations.length)];
+      return aiMlQuestions[Math.floor(Math.random() * aiMlQuestions.length)];
     }
     
-    return "Thank you for your response. Can you provide more details about your approach to this problem?";
+    if (prompt.toLowerCase().includes('frontend')) {
+      const frontendQuestions = [
+        "What is the difference between let, const, and var in JavaScript?",
+        "Explain the concept of closures in JavaScript with an example.",
+        "How would you optimize a React application for better performance?",
+        "What is the virtual DOM and how does React use it?",
+        "Explain CSS Flexbox and when you would use it over CSS Grid.",
+        "What are React hooks and why were they introduced?",
+        "How do you ensure web accessibility (WCAG) in your applications?",
+        "What is the difference between client-side and server-side rendering?"
+      ];
+      return frontendQuestions[Math.floor(Math.random() * frontendQuestions.length)];
+    }
+    
+    if (prompt.toLowerCase().includes('backend')) {
+      const backendQuestions = [
+        "What is the difference between REST and GraphQL APIs?",
+        "How would you design a scalable authentication system?",
+        "Explain database indexing and when you would use it.",
+        "What is the N+1 query problem and how do you solve it?",
+        "How do you handle rate limiting in an API?",
+        "Explain the CAP theorem in distributed systems.",
+        "What is the difference between SQL and NoSQL databases?",
+        "How would you implement caching to improve API performance?"
+      ];
+      return backendQuestions[Math.floor(Math.random() * backendQuestions.length)];
+    }
+    
+    if (prompt.toLowerCase().includes('devops')) {
+      const devopsQuestions = [
+        "What is the difference between Docker and Kubernetes?",
+        "How would you design a CI/CD pipeline for a web application?",
+        "Explain Infrastructure as Code and its benefits.",
+        "What is blue-green deployment and when would you use it?",
+        "How do you monitor and debug issues in production?",
+        "What is the difference between horizontal and vertical scaling?",
+        "Explain container orchestration and why it's important.",
+        "How would you ensure security in a DevOps pipeline?"
+      ];
+      return devopsQuestions[Math.floor(Math.random() * devopsQuestions.length)];
+    }
+    
+    // Generic fallback
+    const technicalQuestions = [
+      "What is the difference between let, const, and var in JavaScript?",
+      "Explain the concept of closures in JavaScript.",
+      "What are the differences between SQL and NoSQL databases?",
+      "Explain the concept of RESTful APIs.",
+      "What is the difference between synchronous and asynchronous programming?",
+      "Explain Big O notation and time complexity.",
+      "How would you implement user authentication in a web application?",
+      "What are the principles of clean code?"
+    ];
+    return technicalQuestions[Math.floor(Math.random() * technicalQuestions.length)];
   }
 
   async generateQuestion(
@@ -217,95 +266,75 @@ Generate ONE thoughtful interview question that fits these criteria. Return only
   }
 
   async evaluateAnswer(
-    question: string, 
-    answer: string, 
-    questionNumber: number = 1,
-    difficulty: 'junior' | 'mid' | 'senior' = 'mid'
+    question: string,
+    userAnswer: string,
+    questionNumber: number
   ): Promise<{
     score: number;
     feedback: string;
-    suggestions: string[];
     strengths: string[];
-    weaknesses: string[];
-  }> {
-    
-    const prompt = `
-You are an expert technical interviewer evaluating a candidate's answer. Provide a comprehensive assessment.
+    suggestions: string[];
+  }> {    
+    const prompt = `You are an expert technical interviewer. Evaluate the following answer strictly and provide a JSON response.
 
 QUESTION: ${question}
-CANDIDATE'S ANSWER: ${answer}
-DIFFICULTY LEVEL: ${difficulty}
+CANDIDATE'S ANSWER: ${userAnswer}
 QUESTION NUMBER: ${questionNumber}
 
-Please evaluate this answer and provide:
+Provide a JSON response with this exact structure:
+{
+  "score": <number 0-100>,
+  "feedback": "<brief overall feedback>",
+  "strengths": ["<strength 1>", "<strength 2>"],
+  "suggestions": ["<suggestion 1>", "<suggestion 2>"]
+}
 
-1. SCORE (1-100): Based on:
-   - Technical accuracy and depth
-   - Clarity of explanation
-   - Practical understanding
-   - Examples and real-world application
-   - Appropriate level for ${difficulty} position
+STRICT SCORING GUIDELINES:
+- 90-100: Excellent, comprehensive answer with deep understanding
+- 70-89: Good answer, demonstrates solid understanding with minor gaps  
+- 50-69: Acceptable answer, shows basic understanding but lacks depth
+- 30-49: Weak answer, significant gaps or inaccuracies
+- 10-29: Poor answer, mostly incorrect or irrelevant
+- 0-9: Completely wrong, gibberish, or no meaningful content
 
-2. FEEDBACK (2-3 sentences): Constructive, encouraging feedback highlighting main points
+BE STRICT: Gibberish, nonsense, or completely irrelevant answers should score 0-5.
 
-3. STRENGTHS (2-3 bullet points): What the candidate did well
-
-4. WEAKNESSES (1-2 bullet points): Areas that could be improved
-
-5. SUGGESTIONS (2-3 bullet points): Specific recommendations for improvement
-
-Format your response exactly as:
-Score: [number]
-Feedback: [feedback text]
-Strengths:
-- [strength 1]
-- [strength 2]
-Weaknesses:
-- [weakness 1]
-- [weakness 2]
-Suggestions:
-- [suggestion 1]
-- [suggestion 2]
-- [suggestion 3]`;
+Respond ONLY with valid JSON, no additional text.`;
 
     try {
       const response = await this.callGeminiAPI(prompt);
       
-      // Parse the structured response
-      const scoreMatch = response.match(/Score:\s*(\d+)/i);
-      const feedbackMatch = response.match(/Feedback:\s*([^]*?)(?=Strengths:|$)/i);
-      const strengthsMatch = response.match(/Strengths:\s*([^]*?)(?=Weaknesses:|$)/i);
-      const weaknessesMatch = response.match(/Weaknesses:\s*([^]*?)(?=Suggestions:|$)/i);
-      const suggestionsMatch = response.match(/Suggestions:\s*([^]*?)$/i);
-      
-      const score = scoreMatch ? Math.min(100, Math.max(1, parseInt(scoreMatch[1]))) : 75;
-      const feedback = feedbackMatch ? feedbackMatch[1].trim() : "Good answer with room for improvement.";
-      
-      const parseListItems = (text: string): string[] => {
-        return text.split('\n')
-          .map(line => line.trim())
-          .filter(line => line.startsWith('-'))
-          .map(line => line.replace(/^-\s*/, ''))
-          .filter(line => line.length > 0);
-      };
-      
-      const strengths = strengthsMatch ? parseListItems(strengthsMatch[1]) : ["Shows understanding of the concept"];
-      const weaknesses = weaknessesMatch ? parseListItems(weaknessesMatch[1]) : ["Could provide more specific examples"];
-      const suggestions = suggestionsMatch ? parseListItems(suggestionsMatch[1]) : [
-        "Provide more specific examples",
-        "Explain the underlying concepts in more detail"
-      ];
-
-      return { score, feedback, suggestions, strengths, weaknesses };
+      // Try to parse JSON response
+      try {
+        const cleanResponse = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const parsed = JSON.parse(cleanResponse);
+        
+        return {
+          score: Math.min(100, Math.max(0, parsed.score || 0)),
+          feedback: parsed.feedback || "Answer evaluated.",
+          strengths: Array.isArray(parsed.strengths) ? parsed.strengths : ["Shows some understanding"],
+          suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : ["Provide more detail"]
+        };
+      } catch (parseError) {
+        // Fallback parsing if JSON fails
+        const scoreMatch = response.match(/[\"']?score[\"']?\s*:\s*(\d+)/i);
+        const score = scoreMatch ? Math.min(100, Math.max(0, parseInt(scoreMatch[1]))) : 50;
+        
+        return {
+          score,
+          feedback: "Answer evaluated. Please see suggestions for improvement.",
+          strengths: ["Attempted the question"],
+          suggestions: ["Provide more specific examples", "Explain concepts more clearly"]
+        };
+      }
       
     } catch (error) {
       console.error('Error evaluating answer:', error);
       return {
-        score: 75,
-        feedback: "Thank you for your response. Your answer shows understanding of the topic.",
-        suggestions: ["Provide more specific examples", "Explain your thought process", "Consider edge cases"],
-        strengths: ["Shows basic understanding", "Clear communication"],
-        weaknesses: ["Could be more detailed"]
+        score: 50,
+        feedback: "Unable to evaluate answer at this time.",
+        suggestions: ["Try again with more detail"],
+        strengths: ["Attempted the question"]
       };
     }
   }
