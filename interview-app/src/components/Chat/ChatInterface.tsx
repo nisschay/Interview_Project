@@ -1,10 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Card, Input, Button, Space, List, Avatar, Typography, Spin } from 'antd';
-import { SendOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
+import { Card, Input, Button, Space, List, Avatar, Typography, Spin, Progress, message, Tag } from 'antd';
+import { SendOutlined, RobotOutlined, UserOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { useSelector, useDispatch } from 'react-redux';
 import type { RootState } from '../../store/store';
-import { addMessage, setCurrentQuestion } from '../../store/slices/interviewSlice';
-import type { Message } from '../../store/slices/interviewSlice';
+import { 
+  addMessage, 
+  setCurrentQuestion, 
+  updateTimer, 
+  updateQuestionScore,
+  endInterview 
+} from '../../store/slices/interviewSlice';
+import type { Message } from '../../types';
 import aiService from '../../services/aiService';
 
 const { TextArea } = Input;
@@ -14,11 +20,21 @@ const ChatInterface: React.FC = () => {
   const dispatch = useDispatch();
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isEvaluating, setIsEvaluating] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<number | null>(null);
   
-  const { messages, progress, resumeContent, jobDescription, interviewType, difficulty } = useSelector(
-    (state: RootState) => state.interview
-  );
+  const { 
+    messages, 
+    progress, 
+    resumeContent, 
+    jobDescription, 
+    interviewType, 
+    difficulty,
+    questionTimer,
+    currentQuestion,
+    currentQuestionNumber
+  } = useSelector((state: RootState) => state.interview);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -26,62 +42,187 @@ const ChatInterface: React.FC = () => {
 
   useEffect(scrollToBottom, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim()) return;
+  // Timer management
+  useEffect(() => {
+    if (questionTimer.isActive && questionTimer.timeRemaining > 0) {
+      timerRef.current = window.setTimeout(() => {
+        dispatch(updateTimer(questionTimer.timeRemaining - 1));
+      }, 1000);
+    } else if (questionTimer.isActive && questionTimer.timeRemaining === 0) {
+      // Time's up - auto submit answer
+      handleTimeUp();
+    }
 
+    return () => {
+      if (timerRef.current) {
+        window.clearTimeout(timerRef.current);
+      }
+    };
+  }, [questionTimer.timeRemaining, questionTimer.isActive]);
+
+  const handleTimeUp = async () => {
+    if (inputValue.trim()) {
+      // Auto-submit the current answer
+      await handleSendMessage(true);
+    } else {
+      // No answer provided
+      dispatch(addMessage({
+        type: 'user',
+        content: '[No answer provided - time expired]'
+      }));
+      
+      setTimeout(() => {
+        generateNextQuestion();
+      }, 1000);
+    }
+  };
+
+  const handleSendMessage = async (isAutoSubmit = false) => {
+    if (!inputValue.trim() && !isAutoSubmit) return;
+
+    const userAnswer = inputValue.trim() || '[No answer provided]';
+    
     // Add user message
-    dispatch(addMessage({
-      type: 'user',
-      content: inputValue,
-    }));
+    const userMessage = {
+      type: 'user' as const,
+      content: userAnswer,
+      questionNumber: currentQuestionNumber
+    };
+    dispatch(addMessage(userMessage));
 
     setInputValue('');
+    setIsEvaluating(true);
+
+    try {
+      // Evaluate the answer
+      if (currentQuestion) {
+        const evaluation = await aiService.evaluateAnswer(
+          currentQuestion,
+          userAnswer,
+          currentQuestionNumber,
+          difficulty
+        );
+
+        // Update the score for this question
+        dispatch(updateQuestionScore({
+          questionId: Date.now().toString(),
+          score: evaluation.score
+        }));
+
+        // Add AI feedback
+        const feedbackMessage = `**Score: ${evaluation.score}/100**\n\n${evaluation.feedback}\n\n**Strengths:**\n${evaluation.strengths.map(s => `• ${s}`).join('\n')}\n\n**Suggestions:**\n${evaluation.suggestions.map(s => `• ${s}`).join('\n')}`;
+        
+        dispatch(addMessage({
+          type: 'ai',
+          content: feedbackMessage,
+          score: evaluation.score
+        }));
+
+        setTimeout(() => {
+          setIsEvaluating(false);
+          generateNextQuestion();
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error evaluating answer:', error);
+      setIsEvaluating(false);
+      generateNextQuestion();
+    }
+  };
+
+  const generateNextQuestion = async () => {
+    // Check if interview should end
+    if (currentQuestionNumber >= progress.totalQuestions) {
+      endInterviewWithSummary();
+      return;
+    }
+
     setIsTyping(true);
 
-    // Get previous questions for context
-    const previousQuestions = messages
-      .filter(msg => msg.type === 'ai')
-      .map(msg => msg.content);
-
-    // Generate AI response using Gemini
     try {
+      // Get previous questions for context
+      const previousQuestions = messages
+        .filter(msg => msg.type === 'ai' && !msg.content.includes('Score:'))
+        .map(msg => msg.content);
+
       const response = await aiService.generateQuestion(
         resumeContent,
         jobDescription,
         interviewType,
         difficulty,
-        previousQuestions
+        previousQuestions,
+        currentQuestionNumber + 1
       );
       
       setTimeout(() => {
+        dispatch(setCurrentQuestion({ 
+          question: response.content,
+          timeLimit: getTimeLimitForDifficulty(difficulty)
+        }));
+        
         dispatch(addMessage({
           type: 'ai',
           content: response.content,
+          questionNumber: currentQuestionNumber + 1
         }));
         
-        dispatch(setCurrentQuestion(response.content));
         setIsTyping(false);
       }, 1500);
     } catch (error) {
-      console.error('Error generating AI response:', error);
+      console.error('Error generating question:', error);
       setTimeout(() => {
-        const fallbackResponses = [
-          "Thank you for that answer. Can you elaborate on your experience with this technology?",
-          "Interesting approach! How would you handle potential challenges with this solution?",
-          "Good explanation. What other alternatives did you consider?",
-          "That's a solid foundation. How would you scale this for production use?"
-        ];
-        const fallbackResponse = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+        const fallbackQuestion = getFallbackQuestion(currentQuestionNumber + 1, interviewType);
+        
+        dispatch(setCurrentQuestion({ 
+          question: fallbackQuestion,
+          timeLimit: getTimeLimitForDifficulty(difficulty)
+        }));
         
         dispatch(addMessage({
           type: 'ai',
-          content: fallbackResponse,
+          content: fallbackQuestion,
+          questionNumber: currentQuestionNumber + 1
         }));
         
-        dispatch(setCurrentQuestion(fallbackResponse));
         setIsTyping(false);
       }, 1500);
     }
+  };
+
+  const endInterviewWithSummary = async () => {
+    setIsTyping(true);
+    
+    try {
+      const summary = await aiService.generateFinalSummary(
+        messages,
+        { name: 'Candidate' }, // We'll get this from parsed resume data later
+        { type: interviewType, difficulty }
+      );
+
+      dispatch(endInterview({
+        finalScore: summary.overallScore,
+        summary: summary.summary
+      }));
+
+      const finalMessage = `🎉 **Interview Complete!**\n\n**Final Score: ${summary.overallScore}/100**\n\n**Summary:**\n${summary.summary}\n\n**Key Strengths:**\n${summary.strengths.map(s => `• ${s}`).join('\n')}\n\n**Areas for Improvement:**\n${summary.improvements.map(i => `• ${i}`).join('\n')}\n\n**Recommendation:** ${summary.recommendation}`;
+
+      dispatch(addMessage({
+        type: 'ai',
+        content: finalMessage
+      }));
+
+      message.success('Interview completed! Check the Interviewer Dashboard for detailed results.');
+    } catch (error) {
+      console.error('Error generating summary:', error);
+      dispatch(endInterview({}));
+      
+      dispatch(addMessage({
+        type: 'ai',
+        content: '🎉 **Interview Complete!**\n\nThank you for participating in this interview. Your responses have been recorded and will be reviewed.'
+      }));
+    }
+    
+    setIsTyping(false);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -89,6 +230,57 @@ const ChatInterface: React.FC = () => {
       e.preventDefault();
       handleSendMessage();
     }
+  };
+
+  const getTimeLimitForDifficulty = (diff: string): number => {
+    switch (diff) {
+      case 'junior': return 20;
+      case 'mid': return 60;
+      case 'senior': return 120;
+      default: return 60;
+    }
+  };
+
+  const getFallbackQuestion = (questionNum: number, type: string): string => {
+    const fallbacks = {
+      technical: [
+        "Can you explain your experience with JavaScript and any frameworks you've used?",
+        "How do you approach debugging when you encounter a problem in your code?",
+        "What's your experience with databases and how do you optimize queries?",
+        "How do you ensure code quality and what testing practices do you follow?",
+        "Can you describe a challenging technical problem you solved recently?"
+      ],
+      behavioral: [
+        "Tell me about a time you had to work under a tight deadline.",
+        "How do you handle feedback and criticism from team members?",
+        "Describe a situation where you had to learn something new quickly.",
+        "Tell me about a time you disagreed with a team decision.",
+        "How do you prioritize your work when facing multiple deadlines?"
+      ],
+      mixed: [
+        "How do you balance technical excellence with meeting business requirements?",
+        "Describe your experience working in agile development environments.",
+        "How do you communicate technical concepts to non-technical stakeholders?",
+        "Tell me about a time you had to mentor a junior developer.",
+        "How do you stay updated with new technologies while maintaining current projects?"
+      ]
+    };
+    
+    const questions = fallbacks[type as keyof typeof fallbacks] || fallbacks.technical;
+    return questions[Math.min(questionNum - 1, questions.length - 1)];
+  };
+
+  const formatTimeRemaining = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getTimerColor = (timeRemaining: number, timeLimit: number): string => {
+    const percentage = (timeRemaining / timeLimit) * 100;
+    if (percentage > 60) return '#52c41a';
+    if (percentage > 30) return '#faad14';
+    return '#ff4d4f';
   };
 
   return (
@@ -106,7 +298,21 @@ const ChatInterface: React.FC = () => {
           }}>
             AI Interview Chat
           </span>
-          <Text type="secondary">({progress.questionsAsked}/{progress.totalQuestions})</Text>
+          <Text type="secondary">
+            Question {currentQuestionNumber}/{progress.totalQuestions}
+          </Text>
+          {questionTimer.isActive && (
+            <Space>
+              <ClockCircleOutlined style={{ color: getTimerColor(questionTimer.timeRemaining, questionTimer.timeLimit) }} />
+              <Text style={{ 
+                color: getTimerColor(questionTimer.timeRemaining, questionTimer.timeLimit),
+                fontWeight: 'bold',
+                fontSize: '14px'
+              }}>
+                {formatTimeRemaining(questionTimer.timeRemaining)}
+              </Text>
+            </Space>
+          )}
         </Space>
       }
       style={{ 
@@ -125,6 +331,18 @@ const ChatInterface: React.FC = () => {
         minHeight: 0
       }}
     >
+      {/* Timer Progress Bar */}
+      {questionTimer.isActive && (
+        <div style={{ padding: '0 16px' }}>
+          <Progress
+            percent={Math.round((questionTimer.timeRemaining / questionTimer.timeLimit) * 100)}
+            strokeColor={getTimerColor(questionTimer.timeRemaining, questionTimer.timeLimit)}
+            showInfo={false}
+            size="small"
+          />
+        </div>
+      )}
+
       <div style={{ 
         flex: 1, 
         padding: 16, 
@@ -135,7 +353,9 @@ const ChatInterface: React.FC = () => {
           <div style={{ textAlign: 'center', padding: 40 }}>
             <RobotOutlined style={{ fontSize: 48, color: '#1890ff', marginBottom: 16 }} />
             <Title level={4}>Welcome to your AI Interview!</Title>
-            <Text type="secondary">The AI interviewer will ask you questions based on your resume and the job description.</Text>
+            <Text type="secondary">
+              The AI interviewer will ask you {progress.totalQuestions} questions based on your resume and the job description.
+            </Text>
           </div>
         ) : (
           <List
@@ -153,7 +373,15 @@ const ChatInterface: React.FC = () => {
                   }
                   title={
                     <Space>
-                      <Text strong>{message.type === 'ai' ? 'AI Interviewer' : 'You'}</Text>
+                      <Text strong>{message.type === 'ai' ? '🤖 AI Interviewer' : '👤 You'}</Text>
+                      {message.questionNumber && (
+                        <Tag>Q{message.questionNumber}</Tag>
+                      )}
+                      {message.score && (
+                        <Tag color={message.score >= 80 ? 'green' : message.score >= 60 ? 'orange' : 'red'}>
+                          {message.score}/100
+                        </Tag>
+                      )}
                       <Text type="secondary" style={{ fontSize: 12 }}>
                         {new Date(message.timestamp).toLocaleTimeString()}
                       </Text>
@@ -174,7 +402,11 @@ const ChatInterface: React.FC = () => {
                       fontSize: '15px',
                       lineHeight: '1.6'
                     }}>
-                      <Text style={{ color: '#374151' }}>{message.content}</Text>
+                      <div style={{ whiteSpace: 'pre-wrap' }}>
+                        {message.content.split('**').map((part, i) => 
+                          i % 2 === 1 ? <strong key={i}>{part}</strong> : part
+                        )}
+                      </div>
                     </div>
                   }
                 />
@@ -183,12 +415,12 @@ const ChatInterface: React.FC = () => {
           />
         )}
         
-        {isTyping && (
+        {(isTyping || isEvaluating) && (
           <div style={{ padding: '8px 0' }}>
             <List.Item style={{ border: 'none' }}>
               <List.Item.Meta
                 avatar={<Avatar icon={<RobotOutlined />} style={{ backgroundColor: '#1890ff' }} />}
-                title={<Text strong>AI Interviewer</Text>}
+                title={<Text strong>🤖 AI Interviewer</Text>}
                 description={
                   <div style={{ 
                     background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
@@ -199,7 +431,9 @@ const ChatInterface: React.FC = () => {
                   }}>
                     <Space>
                       <Spin size="small" style={{ color: '#667eea' }} />
-                      <Text type="secondary" style={{ fontSize: '15px' }}>AI is thinking...</Text>
+                      <Text type="secondary" style={{ fontSize: '15px' }}>
+                        {isEvaluating ? 'Evaluating your answer...' : 'Generating next question...'}
+                      </Text>
                     </Space>
                   </div>
                 }
@@ -231,12 +465,13 @@ const ChatInterface: React.FC = () => {
               fontSize: '15px',
               padding: '12px 16px'
             }}
+            disabled={isTyping || isEvaluating || !questionTimer.isActive}
           />
           <Button
             type="primary"
             icon={<SendOutlined />}
-            onClick={handleSendMessage}
-            disabled={!inputValue.trim() || isTyping}
+            onClick={() => handleSendMessage()}
+            disabled={!inputValue.trim() || isTyping || isEvaluating || !questionTimer.isActive}
             size="large"
             style={{
               borderRadius: '0 12px 12px 0',

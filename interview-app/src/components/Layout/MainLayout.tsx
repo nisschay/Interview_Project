@@ -120,7 +120,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         flexDirection: 'column',
         background: 'transparent',
         minHeight: 0,
-        flex: 1
+        flex: 1,
+        padding: 0,
+        width: '100%',
+        overflow: 'auto'
       }}>
         <div style={{
           background: 'rgba(255, 255, 255, 0.98)',
@@ -129,10 +132,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
           border: '1px solid rgba(0, 0, 0, 0.06)',
           flex: 1,
-          margin: '20px',
+          margin: '16px',
           display: 'flex',
           flexDirection: 'column',
-          overflow: 'hidden'
+          overflow: 'auto'
         }}>
           {children}
         </div>

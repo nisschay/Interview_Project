@@ -11,10 +11,12 @@ const cors = require('cors');
 const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 
-// Enable CORS for frontend
+// Enable CORS for frontend - allow all origins in development
 app.use(cors({
-  origin: 'http://localhost:5173',
-  credentials: true
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
@@ -30,7 +32,7 @@ async function callGemini(prompt) {
     throw new Error('Gemini API key not configured');
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
   
   const body = {
     contents: [{
@@ -102,19 +104,21 @@ You are a resume parser. Extract the following information from this resume text
 
 {
   "name": "full name of the person",
-  "age": "age in years (if not found, estimate from graduation year or experience)",
-  "gender": "gender if mentioned (otherwise leave empty)",
+  "age": "age in years (if not found, estimate from graduation year or experience, or leave empty)",
+  "gender": "gender if mentioned or can be inferred from name (Male/Female/Other, or leave empty if uncertain)",
   "phone": "phone number with country code if available",
   "email": "email address",
-  "summary": "brief 2-3 line professional summary"
+  "summary": "brief 2-3 line professional summary based on experience and skills"
 }
 
 Important rules:
 - Return ONLY the JSON object, no other text
-- If a field is not found, use empty string ""
-- For phone numbers, include country code if available
-- For age, if not explicitly mentioned, try to estimate from graduation dates or years of experience
-- Keep summary concise and professional
+- If a field is not found or uncertain, use empty string ""
+- For phone numbers, include country code if available (e.g., +91 for India, +1 for US)
+- For age, if not explicitly mentioned, try to estimate from graduation dates or years of experience, but if uncertain leave empty
+- For gender, only fill if explicitly mentioned or very clear from name, otherwise leave empty
+- Keep summary concise and professional, highlighting key skills and experience
+- Ensure all values are strings
 
 Resume text:
 """
