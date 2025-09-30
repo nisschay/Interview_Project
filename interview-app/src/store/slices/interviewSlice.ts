@@ -8,6 +8,7 @@ export interface InterviewState {
   messages: Message[];
   currentQuestion: string | null;
   currentQuestionNumber: number;
+  allQuestions: Array<{ id: string; question: string; answer?: string; score?: number; }>;
   resumeContent: string | null;
   parsedResumeData: ParsedResumeData | null;
   jobDescription: string | null;
@@ -15,6 +16,11 @@ export interface InterviewState {
   difficulty: 'junior' | 'mid' | 'senior';
   progress: InterviewProgress;
   questionTimer: QuestionTimer;
+  overallTimer: {
+    totalMinutes: number;
+    timeRemaining: number;
+    isActive: boolean;
+  };
   sessions: InterviewSession[];
   currentSessionId: string | null;
   candidateInfo: {
@@ -29,7 +35,8 @@ const initialState: InterviewState = {
   isPaused: false,
   messages: [],
   currentQuestion: null,
-  currentQuestionNumber: 0,
+  currentQuestionNumber: 1,
+  allQuestions: [],
   resumeContent: null,
   parsedResumeData: null,
   jobDescription: null,
@@ -37,7 +44,7 @@ const initialState: InterviewState = {
   difficulty: 'mid',
   progress: {
     questionsAsked: 0,
-    totalQuestions: 10,
+    totalQuestions: 5,
     currentScore: 0,
     averageScore: 0,
     isCompleted: false,
@@ -45,6 +52,11 @@ const initialState: InterviewState = {
   questionTimer: {
     timeLimit: 60,
     timeRemaining: 60,
+    isActive: false,
+  },
+  overallTimer: {
+    totalMinutes: 15,
+    timeRemaining: 900,
     isActive: false,
   },
   sessions: [],
@@ -61,12 +73,16 @@ const interviewSlice = createSlice({
       state.isActive = true;
       state.isPaused = false;
       state.messages = [];
-      state.currentQuestionNumber = 0;
+      state.currentQuestionNumber = 1;
       state.progress.questionsAsked = 0;
       state.progress.currentScore = 0;
       state.progress.averageScore = 0;
       state.progress.isCompleted = false;
       state.currentSessionId = sessionId;
+      
+      // Start overall timer
+      state.overallTimer.timeRemaining = state.overallTimer.totalMinutes * 60;
+      state.overallTimer.isActive = true;
       
       // Create new session
       const newSession: InterviewSession = {
@@ -81,6 +97,7 @@ const interviewSlice = createSlice({
     pauseInterview: (state) => {
       state.isPaused = true;
       state.questionTimer.isActive = false;
+      state.overallTimer.isActive = false;
       // Update current session status
       const currentSession = state.sessions.find(s => s.id === state.currentSessionId);
       if (currentSession) {
@@ -90,6 +107,7 @@ const interviewSlice = createSlice({
     
     resumeInterview: (state) => {
       state.isPaused = false;
+      state.overallTimer.isActive = true;
       // Update current session status
       const currentSession = state.sessions.find(s => s.id === state.currentSessionId);
       if (currentSession) {
@@ -102,6 +120,7 @@ const interviewSlice = createSlice({
       state.isPaused = false;
       state.currentQuestion = null;
       state.questionTimer.isActive = false;
+      state.overallTimer.isActive = false;
       state.progress.isCompleted = true;
       
       // Update current session
@@ -166,10 +185,45 @@ const interviewSlice = createSlice({
       type: InterviewState['interviewType'];
       difficulty: InterviewState['difficulty'];
       totalQuestions: number;
+      timeLimit?: number;
     }>) => {
       state.interviewType = action.payload.type;
       state.difficulty = action.payload.difficulty;
       state.progress.totalQuestions = action.payload.totalQuestions;
+      if (action.payload.timeLimit) {
+        state.overallTimer.totalMinutes = action.payload.timeLimit;
+      }
+    },
+    
+    setAllQuestions: (state, action: PayloadAction<Array<{ id: string; question: string; }>>) => {
+      state.allQuestions = action.payload;
+    },
+    
+    updateOverallTimer: (state, action: PayloadAction<number>) => {
+      if (state.overallTimer.isActive) {
+        state.overallTimer.timeRemaining = Math.max(0, action.payload);
+        if (state.overallTimer.timeRemaining === 0) {
+          state.overallTimer.isActive = false;
+        }
+      }
+    },
+    
+    navigateToQuestion: (state, action: PayloadAction<number>) => {
+      state.currentQuestionNumber = action.payload;
+      const question = state.allQuestions[action.payload - 1];
+      if (question) {
+        state.currentQuestion = question.question;
+      }
+    },
+    
+    updateQuestionAnswer: (state, action: PayloadAction<{ questionId: string; answer: string; score?: number }>) => {
+      const question = state.allQuestions.find(q => q.id === action.payload.questionId);
+      if (question) {
+        question.answer = action.payload.answer;
+        if (action.payload.score !== undefined) {
+          question.score = action.payload.score;
+        }
+      }
     },
     
     updateQuestionScore: (state, action: PayloadAction<{ questionId: string; score: number }>) => {
@@ -223,6 +277,10 @@ export const {
   updateQuestionScore,
   setCandidateInfo,
   clearInterview,
+  setAllQuestions,
+  updateOverallTimer,
+  navigateToQuestion,
+  updateQuestionAnswer,
 } = interviewSlice.actions;
 
 export default interviewSlice.reducer;

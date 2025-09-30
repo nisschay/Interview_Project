@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Select, Typography, Space, Alert, Row, Col, Progress, Tag, Statistic, Timeline } from 'antd';
-import { MessageOutlined, PlayCircleOutlined, StopOutlined, CheckOutlined, ClockCircleOutlined, TrophyOutlined } from '@ant-design/icons';
+import { Card, Button, Select, Typography, Space, Alert, Row, Col } from 'antd';
+import { MessageOutlined, PlayCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { useSelector, useDispatch } from 'react-redux';
 import type { RootState } from '../store/store';
 import { 
   startInterview, 
-  endInterview, 
   addMessage, 
   setParsedResumeData, 
   setJobDescription, 
   setInterviewConfig,
-  setCurrentQuestion
+  setCurrentQuestion,
+  setAllQuestions
 } from '../store/slices/interviewSlice';
 import ChatInterface from '../components/Chat/ChatInterface';
 import ResumeUploader from '../components/ResumeParser/ResumeUploader';
@@ -24,18 +24,18 @@ const IntervieweePage: React.FC = () => {
   const dispatch = useDispatch();
   const { 
     isActive, 
-    isPaused,
     interviewType, 
     difficulty, 
     progress, 
     messages,
-    parsedResumeData,
-    questionTimer
+    parsedResumeData
   } = useSelector((state: RootState) => state.interview);
 
   const [resumeConfirmed, setResumeConfirmed] = useState(!!parsedResumeData);
   const [showWelcomeBack, setShowWelcomeBack] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<string>('');
+  const [timeLimit, setTimeLimit] = useState(15); // Default 15 minutes
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
 
   // Sync resumeConfirmed when parsedResumeData changes
   useEffect(() => {
@@ -118,68 +118,123 @@ const IntervieweePage: React.FC = () => {
     
     const jobDesc = predefinedPositions[selectedPosition as keyof typeof predefinedPositions]?.description || '';
     dispatch(setJobDescription(jobDesc));
-    dispatch(startInterview());
     
-    // Add welcome message
-    dispatch(addMessage({
-      type: 'ai',
-      content: `🎯 **Welcome to your ${interviewType} interview!**\n\nI'm an AI interviewer and I'll be conducting a ${difficulty}-level interview with ${progress.totalQuestions} questions.\n\n${parsedResumeData ? `I've analyzed your resume and the job description. ` : ''}Let me start with your first question...`
-    }));
-
-    // Generate first question
-    setTimeout(async () => {
-      try {
+    setIsGeneratingQuestions(true);
+    
+    try {
+      // Generate all questions upfront
+      const questions: Array<{ id: string; question: string }> = [];
+      
+      for (let i = 1; i <= progress.totalQuestions; i++) {
         const response = await aiService.generateQuestion(
           parsedResumeData?.rawText || null,
           jobDesc,
           interviewType,
           difficulty,
-          [],
-          1
+          questions.map(q => q.question),
+          i
         );
         
-        dispatch(addMessage({
-          type: 'ai',
-          content: response.content,
-          questionNumber: 1
-        }));
-        
-        // Activate timer for the question
-        dispatch(setCurrentQuestion({
+        questions.push({
+          id: `q${i}-${Date.now()}`,
           question: response.content
-        }));
-      } catch (error) {
-        console.error('Error generating first question:', error);
-        const defaultQuestion = getDefaultFirstQuestion(interviewType);
-        dispatch(addMessage({
-          type: 'ai',
-          content: defaultQuestion,
-          questionNumber: 1
-        }));
-        
-        // Activate timer for the question
+        });
+      }
+      
+      // Store all questions in Redux
+      dispatch(setAllQuestions(questions));
+      
+      // Start the interview with the time limit
+      dispatch(setInterviewConfig({
+        type: interviewType,
+        difficulty,
+        totalQuestions: progress.totalQuestions,
+        timeLimit
+      }));
+      
+      dispatch(startInterview());
+      
+      // Add welcome message
+      dispatch(addMessage({
+        type: 'ai',
+        content: `🎯 **Welcome to your ${interviewType} interview!**\n\nYou have ${timeLimit} minutes to answer ${progress.totalQuestions} questions.\n\n${parsedResumeData ? `I've analyzed your resume and generated personalized questions. ` : ''}You can see all questions in the sidebar and navigate between them.\n\n**Good luck!**`
+      }));
+      
+      // Set the first question as current
+      if (questions.length > 0) {
         dispatch(setCurrentQuestion({
-          question: defaultQuestion
+          question: questions[0].question
         }));
       }
-    }, 2000);
-  };
-
-  const getDefaultFirstQuestion = (type: string): string => {
-    switch (type) {
-      case 'technical':
-        return "Let's start with the basics. Can you tell me about your experience with software development and the technologies you're most comfortable working with?";
-      case 'behavioral':
-        return "To begin, could you tell me about yourself and what motivated you to pursue a career in software development?";
-      case 'mixed':
-        return "Let's get started! Can you introduce yourself and tell me about a recent project you worked on that you're particularly proud of?";
-      default:
-        return "Let's begin the interview. Can you tell me about your background and experience?";
+      
+    } catch (error) {
+      console.error('Error generating questions:', error);
+      // Fallback to default questions
+      const fallbackQuestions = getFallbackQuestions(interviewType, progress.totalQuestions);
+      dispatch(setAllQuestions(fallbackQuestions));
+      
+      dispatch(startInterview());
+      
+      dispatch(addMessage({
+        type: 'ai',
+        content: `🎯 **Welcome to your ${interviewType} interview!**\n\nYou have ${timeLimit} minutes to answer ${progress.totalQuestions} questions.\n\nYou can see all questions in the sidebar and navigate between them.\n\n**Good luck!**`
+      }));
+      
+      if (fallbackQuestions.length > 0) {
+        dispatch(setCurrentQuestion({
+          question: fallbackQuestions[0].question
+        }));
+      }
+    } finally {
+      setIsGeneratingQuestions(false);
     }
   };
 
-  const handleEndInterview = () => {
-    dispatch(endInterview({}));
+  const getFallbackQuestions = (type: string, count: number): Array<{ id: string; question: string }> => {
+    const fallbacks = {
+      technical: [
+        "Can you explain your experience with JavaScript and any frameworks you've used?",
+        "How do you approach debugging when you encounter a problem in your code?",
+        "What's your experience with databases and how do you optimize queries?",
+        "Describe a challenging technical problem you solved recently.",
+        "How do you ensure code quality and what testing practices do you follow?",
+        "What's your experience with version control systems like Git?",
+        "How do you stay updated with the latest technology trends?",
+        "Can you explain the concept of RESTful APIs?",
+        "What's your approach to learning a new programming language or framework?",
+        "Describe your experience with cloud platforms like AWS or Azure."
+      ],
+      behavioral: [
+        "Tell me about yourself and your career journey.",
+        "Describe a time when you had to work with a difficult team member.",
+        "How do you handle stress and pressure in the workplace?",
+        "Tell me about a time when you failed and what you learned from it.",
+        "How do you prioritize tasks when you have multiple deadlines?",
+        "Describe a situation where you had to adapt to significant changes.",
+        "Tell me about a time when you had to learn something new quickly.",
+        "How do you handle constructive criticism?",
+        "Describe a situation where you showed leadership.",
+        "What motivates you in your professional life?"
+      ],
+      mixed: [
+        "Tell me about a recent project you worked on and the technologies you used.",
+        "How do you approach problem-solving in a team environment?",
+        "Describe a technical challenge you faced and how you overcame it.",
+        "How do you balance technical excellence with meeting deadlines?",
+        "Tell me about a time when you had to explain a technical concept to a non-technical person.",
+        "How do you handle disagreements about technical decisions?",
+        "Describe your experience with agile development methodologies.",
+        "How do you ensure your code is maintainable and scalable?",
+        "Tell me about a time when you had to mentor someone.",
+        "How do you approach continuous learning and skill development?"
+      ]
+    };
+    
+    const questionList = fallbacks[type as keyof typeof fallbacks] || fallbacks.technical;
+    return questionList.slice(0, count).map((q, i) => ({
+      id: `fallback-${i + 1}`,
+      question: q
+    }));
   };
 
   const handleConfigChange = (field: string, value: any) => {
@@ -221,138 +276,10 @@ const IntervieweePage: React.FC = () => {
 
   // Active Interview Interface
   if (isActive) {
-    const progressPercentage = Math.round((progress.questionsAsked / progress.totalQuestions) * 100);
-    
     return (
       <div style={{ padding: '24px', height: '100%', display: 'flex', flexDirection: 'column' }}>
-        {/* Status Header */}
-        <Row gutter={24} style={{ marginBottom: '24px' }}>
-          <Col span={6}>
-            <Card size="small">
-              <Statistic
-                title="Status"
-                value={isPaused ? "Paused" : "Active"}
-                prefix={isPaused ? <ClockCircleOutlined /> : <CheckOutlined />}
-                valueStyle={{ 
-                  color: isPaused ? '#faad14' : '#52c41a',
-                  fontSize: '20px'
-                }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card size="small">
-              <Statistic
-                title="Progress"
-                value={`${progress.questionsAsked}/${progress.totalQuestions}`}
-                prefix={<MessageOutlined />}
-                suffix={
-                  <Progress
-                    type="circle"
-                    size={40}
-                    percent={progressPercentage}
-                    format={() => `${progressPercentage}%`}
-                    strokeWidth={8}
-                  />
-                }
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card size="small">
-              <Statistic
-                title="Average Score"
-                value={progress.averageScore}
-                prefix={<TrophyOutlined />}
-                suffix="/100"
-                valueStyle={{ 
-                  color: progress.averageScore >= 80 ? '#52c41a' : 
-                        progress.averageScore >= 60 ? '#faad14' : '#ff4d4f'
-                }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card size="small">
-              <Statistic
-                title="Time Remaining"
-                value={questionTimer.isActive ? `${Math.floor(questionTimer.timeRemaining / 60)}:${(questionTimer.timeRemaining % 60).toString().padStart(2, '0')}` : '--:--'}
-                prefix={<ClockCircleOutlined />}
-                valueStyle={{ 
-                  color: questionTimer.timeRemaining > 30 ? '#52c41a' : 
-                        questionTimer.timeRemaining > 10 ? '#faad14' : '#ff4d4f'
-                }}
-              />
-            </Card>
-          </Col>
-        </Row>
-
-        {/* Main Interview Area */}
-        <Row gutter={24} style={{ flex: 1, minHeight: 0 }}>
-          <Col span={18}>
-            <ChatInterface />
-          </Col>
-          <Col span={6}>
-            <Space direction="vertical" size="large" style={{ width: '100%', height: '100%' }}>
-              {/* Interview Configuration */}
-              <Card title="Interview Details" size="small">
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  <div>
-                    <Text strong>Type: </Text>
-                    <Tag color="blue" style={{ textTransform: 'capitalize' }}>
-                      {interviewType}
-                    </Tag>
-                  </div>
-                  <div>
-                    <Text strong>Difficulty: </Text>
-                    <Tag color="orange" style={{ textTransform: 'capitalize' }}>
-                      {difficulty}
-                    </Tag>
-                  </div>
-                  <div>
-                    <Text strong>Questions: </Text>
-                    <Tag color="green">{progress.totalQuestions} Total</Tag>
-                  </div>
-                  <Button 
-                    type="primary" 
-                    danger 
-                    icon={<StopOutlined />}
-                    onClick={handleEndInterview}
-                    block
-                    style={{ marginTop: '16px' }}
-                  >
-                    End Interview
-                  </Button>
-                </Space>
-              </Card>
-
-              {/* Recent Activity */}
-              <Card title="Recent Activity" size="small" style={{ flex: 1 }}>
-                <Timeline
-                  items={messages.slice(-4).map((msg: any) => ({
-                    color: msg.type === 'ai' ? 'blue' : 'green',
-                    children: (
-                      <div key={msg.id}>
-                        <Text strong style={{ fontSize: '12px' }}>
-                          {msg.type === 'ai' ? '🤖 AI' : '👤 You'}
-                          {msg.questionNumber && ` (Q${msg.questionNumber})`}
-                        </Text>
-                        <br />
-                        <Text style={{ fontSize: '11px', color: '#666' }}>
-                          {msg.content.length > 60 ? `${msg.content.substring(0, 60)}...` : msg.content}
-                        </Text>
-                        <br />
-                        <Text type="secondary" style={{ fontSize: '10px' }}>
-                          {new Date(msg.timestamp).toLocaleTimeString()}
-                        </Text>
-                      </div>
-                    ),
-                  }))}
-                />
-              </Card>
-            </Space>
-          </Col>
-        </Row>
+        {/* Main Interview Area - Full Width */}
+        <ChatInterface />
       </div>
     );
   }
@@ -512,11 +439,32 @@ const IntervieweePage: React.FC = () => {
                   style={{ width: '100%' }}
                   size="large"
                 >
-                  <Option value={5}>5 Questions (Quick - 15 min)</Option>
-                  <Option value={10}>10 Questions (Standard - 30 min)</Option>
-                  <Option value={15}>15 Questions (Extended - 45 min)</Option>
-                  <Option value={20}>20 Questions (Comprehensive - 60 min)</Option>
+                  <Option value={5}>5 Questions</Option>
+                  <Option value={10}>10 Questions</Option>
+                  <Option value={15}>15 Questions</Option>
+                  <Option value={20}>20 Questions</Option>
                 </Select>
+              </div>
+              
+              <div>
+                <Text strong style={{ display: 'block', marginBottom: '8px' }}>Interview Time Limit</Text>
+                <Select
+                  value={timeLimit}
+                  onChange={(value) => setTimeLimit(value)}
+                  style={{ width: '100%' }}
+                  size="large"
+                >
+                  <Option value={5}>5 minutes (Quick test)</Option>
+                  <Option value={10}>10 minutes</Option>
+                  <Option value={15}>15 minutes (Recommended)</Option>
+                  <Option value={20}>20 minutes</Option>
+                  <Option value={30}>30 minutes</Option>
+                  <Option value={45}>45 minutes</Option>
+                  <Option value={60}>60 minutes</Option>
+                </Select>
+                <Text type="secondary" style={{ fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                  Total time for all questions
+                </Text>
               </div>
             </Space>
           </Card>
@@ -652,9 +600,10 @@ const IntervieweePage: React.FC = () => {
           <Button
             type="primary"
             size="large"
-            icon={<PlayCircleOutlined />}
+            icon={isGeneratingQuestions ? <ClockCircleOutlined spin /> : <PlayCircleOutlined />}
             onClick={handleStartInterview}
-            disabled={!canStart}
+            disabled={!canStart || isGeneratingQuestions}
+            loading={isGeneratingQuestions}
             style={{ 
               height: '64px',
               fontSize: '18px',
@@ -662,18 +611,18 @@ const IntervieweePage: React.FC = () => {
               paddingLeft: '48px',
               paddingRight: '48px',
               borderRadius: '16px',
-              background: canStart 
+              background: canStart && !isGeneratingQuestions
                 ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
                 : '#d9d9d9',
               border: 'none',
-              boxShadow: canStart 
+              boxShadow: canStart && !isGeneratingQuestions
                 ? '0 8px 24px rgba(102, 126, 234, 0.5)' 
                 : 'none',
               transition: 'all 0.3s ease',
-              cursor: canStart ? 'pointer' : 'not-allowed'
+              cursor: canStart && !isGeneratingQuestions ? 'pointer' : 'not-allowed'
             }}
           >
-            🚀 {canStart ? 'Start Interview Now' : 'Complete All Requirements Above'}
+            {isGeneratingQuestions ? '🔄 Generating Questions...' : '🚀 ' + (canStart ? 'Start Interview Now' : 'Complete All Requirements Above')}
           </Button>
         </Col>
       </Row>
