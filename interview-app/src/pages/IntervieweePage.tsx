@@ -20,9 +20,9 @@ const IntervieweePage: React.FC = () => {
 
   const [jobDescription, setJobDesc] = useState('');
   const [resumeFile, setResumeFile] = useState<any>(null);
+  const [currentAnswer, setCurrentAnswer] = useState('');
   const [parsedResume, setParsedResume] = useState<any>(null);
   const [parsedConfirmed, setParsedConfirmed] = useState(false);
-  const [currentAnswer, setCurrentAnswer] = useState('');
 
   const handleStartInterview = async () => {
     if (!jobDescription.trim()) {
@@ -32,16 +32,14 @@ const IntervieweePage: React.FC = () => {
     dispatch(setJobDescription(jobDescription));
     dispatch(startInterview());
     
-    // Add welcome message
     dispatch(addMessage({
       type: 'ai',
       content: `Welcome to your ${interviewType} interview! I've analyzed your resume and the job description. Let me generate your first question...`
     }));
 
-    // Generate first question using AI service
     try {
       const response = await aiService.generateQuestion(
-        null, // resume content would be parsed here
+        parsedResume?.rawText || null,
         jobDescription,
         interviewType,
         difficulty,
@@ -83,14 +81,6 @@ const IntervieweePage: React.FC = () => {
     dispatch(setInterviewConfig(config));
   };
 
-  const handleFileUpload = (info: any) => {
-    if (info.file.status === 'done') {
-      // In a real app, you'd parse the file here
-      setResumeFile(info.file);
-      dispatch(setResumeContent('Resume content would be parsed here'));
-    }
-  };
-
   const handleSendAnswer = () => {
     if (currentAnswer.trim()) {
       dispatch(addMessage({
@@ -99,7 +89,6 @@ const IntervieweePage: React.FC = () => {
       }));
       setCurrentAnswer('');
       
-      // Generate next question
       setTimeout(() => {
         dispatch(addMessage({
           type: 'ai',
@@ -111,16 +100,14 @@ const IntervieweePage: React.FC = () => {
 
   const handleConfirmParsed = () => {
     if (!parsedResume) return;
-    // save raw text to redux so AI can use it
     dispatch(setResumeContent(parsedResume.rawText || ''));
     setResumeFile(parsedResume);
     setParsedConfirmed(true);
   };
 
-  // ensure start requires parsed confirmation if resume uploaded
   const canStart = jobDescription.trim() && (!parsedResume || parsedConfirmed);
 
-  // Active Interview Layout - Dashboard Style like Interviewer
+  // Active Interview Layout - Dashboard Style
   if (isActive) {
     const messageTableData = messages.map((msg, index) => ({
       key: index,
@@ -165,7 +152,6 @@ const IntervieweePage: React.FC = () => {
 
     return (
       <div style={{ padding: '24px' }}>
-        {/* Stats Cards Row - Same as Interviewer Dashboard */}
         <Row gutter={24} style={{ marginBottom: '24px' }}>
           <Col span={6}>
             <Card>
@@ -209,9 +195,7 @@ const IntervieweePage: React.FC = () => {
           </Col>
         </Row>
 
-        {/* Main Content Row */}
         <Row gutter={24}>
-          {/* Left Column - Chat Interface */}
           <Col span={12}>
             <Card title="Live Interview Chat" style={{ height: '500px' }}>
               <div style={{ 
@@ -246,7 +230,6 @@ const IntervieweePage: React.FC = () => {
                 ))}
               </div>
               
-              {/* Answer Input */}
               <Space.Compact style={{ width: '100%' }}>
                 <TextArea
                   value={currentAnswer}
@@ -271,10 +254,8 @@ const IntervieweePage: React.FC = () => {
             </Card>
           </Col>
 
-          {/* Right Column - Interview Info */}
           <Col span={12}>
             <Row gutter={[0, 24]}>
-              {/* Configuration Card */}
               <Col span={24}>
                 <Card title="Interview Configuration">
                   <Row gutter={16}>
@@ -320,7 +301,6 @@ const IntervieweePage: React.FC = () => {
                 </Card>
               </Col>
 
-              {/* Timeline Card */}
               <Col span={24}>
                 <Card title="Interview Timeline" style={{ height: '280px' }}>
                   <div style={{ height: '200px', overflowY: 'auto' }}>
@@ -332,7 +312,6 @@ const IntervieweePage: React.FC = () => {
           </Col>
         </Row>
 
-        {/* Bottom Row - Message History Table */}
         <Row style={{ marginTop: '24px' }}>
           <Col span={24}>
             <Card title="Message History">
@@ -350,179 +329,241 @@ const IntervieweePage: React.FC = () => {
     );
   }
 
-  // Setup Form - Same as before
+  // COMPLETELY REDESIGNED SETUP FORM - FLEX FLOW DESIGN
   return (
     <div style={{
-      padding: '40px 20px',
+      minHeight: '100vh',
       display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'flex-start',
-      minHeight: '100%'
+      flexDirection: 'column',
+      padding: '20px',
+      gap: '20px'
     }}>
-      <Card style={{
-        width: '100%',
-        maxWidth: '900px',
-        borderRadius: '12px',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)'
+      {/* Header Section */}
+      <div style={{
+        textAlign: 'center',
+        marginBottom: '20px'
       }}>
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          <Title level={2} style={{ marginBottom: '8px' }}>
-            <MessageOutlined style={{ marginRight: '12px', color: '#1890ff' }} />
-            AI Technical Interview
-          </Title>
-          <Text type="secondary" style={{ fontSize: '16px' }}>
-            Configure your interview settings and upload your resume to get started
-          </Text>
-        </div>
-
-        {/* Form Grid - Responsive */}
-        <div style={{
-          display: 'grid',
-          gap: '32px',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))'
+        <Title level={1} style={{ 
+          margin: 0,
+          background: 'linear-gradient(135deg, #1890ff, #722ed1)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          fontSize: '2.5rem'
         }}>
-          
-          {/* Interview Settings */}
-          <div>
-            <Title level={4} style={{ marginBottom: '16px' }}>Interview Settings</Title>
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
-              <div>
-                <Text strong style={{ display: 'block', marginBottom: '8px' }}>Interview Type</Text>
-                <Select
-                  value={interviewType}
-                  onChange={(value) => handleConfigChange('type', value)}
-                  style={{ width: '100%' }}
-                  size="large"
-                >
-                  <Option value="technical">Technical</Option>
-                  <Option value="behavioral">Behavioral</Option>
-                  <Option value="mixed">Mixed</Option>
-                </Select>
-              </div>
-              
-              <div>
-                <Text strong style={{ display: 'block', marginBottom: '8px' }}>Difficulty Level</Text>
-                <Select
-                  value={difficulty}
-                  onChange={(value) => handleConfigChange('difficulty', value)}
-                  style={{ width: '100%' }}
-                  size="large"
-                >
-                  <Option value="junior">Junior</Option>
-                  <Option value="mid">Mid-Level</Option>
-                  <Option value="senior">Senior</Option>
-                </Select>
-              </div>
-              
-              <div>
-                <Text strong style={{ display: 'block', marginBottom: '8px' }}>Total Questions</Text>
-                <Select
-                  value={progress.totalQuestions}
-                  onChange={(value) => handleConfigChange('totalQuestions', value)}
-                  style={{ width: '100%' }}
-                  size="large"
-                >
-                  <Option value={5}>5 Questions</Option>
-                  <Option value={10}>10 Questions</Option>
-                  <Option value={15}>15 Questions</Option>
-                  <Option value={20}>20 Questions</Option>
-                </Select>
-              </div>
-            </Space>
-          </div>
+          <MessageOutlined style={{ marginRight: '16px', color: '#1890ff' }} />
+          AI Technical Interview
+        </Title>
+        <Text style={{ 
+          fontSize: '18px', 
+          color: '#666',
+          display: 'block',
+          marginTop: '8px'
+        }}>
+          Configure your interview settings and upload your resume to get started
+        </Text>
+      </div>
 
-          {/* Resume Upload -> replaced with ResumeUploader */}
-          <div>
-            <Title level={4} style={{ marginBottom: '16px' }}>Upload Resume</Title>
-            <ResumeUploader
-              onResult={(parsed) => {
-                setParsedResume(parsed);
-                setParsedConfirmed(false);
-              }}
-            />
+      {/* Main Content - Flex Layout */}
+      <div style={{
+        display: 'flex',
+        gap: '24px',
+        flexWrap: 'wrap',
+        justifyContent: 'center'
+      }}>
+        
+        {/* Interview Settings Card */}
+        <Card 
+          title="🎯 Interview Settings" 
+          style={{ 
+            flex: '1 1 300px',
+            minWidth: '300px',
+            maxWidth: '400px'
+          }}
+        >
+          <Space direction="vertical" style={{ width: '100%' }} size="large">
+            <div>
+              <Text strong style={{ display: 'block', marginBottom: '8px' }}>Interview Type</Text>
+              <Select
+                value={interviewType}
+                onChange={(value) => handleConfigChange('type', value)}
+                style={{ width: '100%' }}
+                size="large"
+              >
+                <Option value="technical">Technical</Option>
+                <Option value="behavioral">Behavioral</Option>
+                <Option value="mixed">Mixed</Option>
+              </Select>
+            </div>
+            
+            <div>
+              <Text strong style={{ display: 'block', marginBottom: '8px' }}>Difficulty Level</Text>
+              <Select
+                value={difficulty}
+                onChange={(value) => handleConfigChange('difficulty', value)}
+                style={{ width: '100%' }}
+                size="large"
+              >
+                <Option value="junior">Junior</Option>
+                <Option value="mid">Mid-Level</Option>
+                <Option value="senior">Senior</Option>
+              </Select>
+            </div>
+            
+            <div>
+              <Text strong style={{ display: 'block', marginBottom: '8px' }}>Total Questions</Text>
+              <Select
+                value={progress.totalQuestions}
+                onChange={(value) => handleConfigChange('totalQuestions', value)}
+                style={{ width: '100%' }}
+                size="large"
+              >
+                <Option value={5}>5 Questions</Option>
+                <Option value={10}>10 Questions</Option>
+                <Option value={15}>15 Questions</Option>
+                <Option value={20}>20 Questions</Option>
+              </Select>
+            </div>
+          </Space>
+        </Card>
 
-            {/* Show parsed fields for review/edit */}
-            {parsedResume && (
-              <div style={{ marginTop: 16, background: '#fafafa', padding: 12, borderRadius: 8 }}>
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>Parsed details (edit if needed)</div>
+        {/* Resume Upload Card */}
+        <Card 
+          title="📄 Upload Resume" 
+          style={{ 
+            flex: '1 1 300px',
+            minWidth: '300px',
+            maxWidth: '400px'
+          }}
+        >
+          <ResumeUploader
+            onResult={(parsed) => {
+              setParsedResume(parsed);
+              setParsedConfirmed(false);
+            }}
+          />
+
+          {/* Parsed Resume Details */}
+          {parsedResume && (
+            <div style={{ marginTop: '16px' }}>
+              <Space direction="vertical" style={{ width: '100%' }} size="small">
+                <Text strong>Review & Edit Details:</Text>
+                
                 <Input
-                  placeholder="Name"
+                  placeholder="Full Name"
                   value={parsedResume.name || ''}
                   onChange={(e) => setParsedResume({ ...parsedResume, name: e.target.value })}
-                  style={{ marginBottom: 8 }}
                 />
+                
+                <Row gutter={8}>
+                  <Col span={12}>
+                    <Input
+                      placeholder="Age"
+                      value={parsedResume.age || ''}
+                      onChange={(e) => setParsedResume({ ...parsedResume, age: e.target.value })}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <Input
+                      placeholder="Gender"
+                      value={parsedResume.gender || ''}
+                      onChange={(e) => setParsedResume({ ...parsedResume, gender: e.target.value })}
+                    />
+                  </Col>
+                </Row>
+                
                 <Input
-                  placeholder="Age"
-                  value={parsedResume.age || ''}
-                  onChange={(e) => setParsedResume({ ...parsedResume, age: e.target.value })}
-                  style={{ marginBottom: 8 }}
-                />
-                <Input
-                  placeholder="Gender"
-                  value={parsedResume.gender || ''}
-                  onChange={(e) => setParsedResume({ ...parsedResume, gender: e.target.value })}
-                  style={{ marginBottom: 8 }}
-                />
-                <Input
-                  placeholder="Phone"
+                  placeholder="Phone Number"
                   value={parsedResume.phone || ''}
                   onChange={(e) => setParsedResume({ ...parsedResume, phone: e.target.value })}
-                  style={{ marginBottom: 8 }}
                 />
+                
                 <Input
-                  placeholder="Email"
+                  placeholder="Email Address"
                   value={parsedResume.email || ''}
                   onChange={(e) => setParsedResume({ ...parsedResume, email: e.target.value })}
-                  style={{ marginBottom: 8 }}
                 />
 
-                <Space style={{ marginTop: 12 }}>
-                  <Button type="primary" icon={<CheckOutlined />} onClick={handleConfirmParsed}>
-                    Confirm & Save
+                <Space>
+                  <Button 
+                    type="primary" 
+                    icon={<CheckOutlined />} 
+                    onClick={handleConfirmParsed}
+                    disabled={parsedConfirmed}
+                  >
+                    {parsedConfirmed ? 'Confirmed ✓' : 'Confirm Details'}
                   </Button>
-                  <Button onClick={() => { setParsedResume(null); setParsedConfirmed(false); setResumeFile(null); }}>
+                  <Button 
+                    onClick={() => { 
+                      setParsedResume(null); 
+                      setParsedConfirmed(false); 
+                    }}
+                  >
                     Remove
                   </Button>
                 </Space>
 
                 {!parsedConfirmed && (
                   <Alert
-                    message="Please confirm parsed details before starting the interview"
+                    message="Please confirm parsed details before starting"
                     type="info"
                     showIcon
-                    style={{ marginTop: 12 }}
                   />
                 )}
-              </div>
-            )}
-          </div>
-        </div>
+              </Space>
+            </div>
+          )}
+        </Card>
 
-        {/* Job Description - Full Width */}
-        <div style={{ marginTop: '32px' }}>
-          <Title level={4} style={{ marginBottom: '16px' }}>Job Description</Title>
+        {/* Job Description Card */}
+        <Card 
+          title="💼 Job Description" 
+          style={{ 
+            flex: '1 1 300px',
+            minWidth: '300px',
+            maxWidth: '400px'
+          }}
+        >
           <TextArea
             value={jobDescription}
             onChange={(e) => setJobDesc(e.target.value)}
-            placeholder="Paste the job description here..."
-            rows={6}
-            style={{ fontSize: '14px', lineHeight: '1.6' }}
-            size="large"
-          />
-        </div>
+            placeholder="Paste the job description here...
 
-        {/* Warning */}
-        {!jobDescription.trim() && (
-          <Alert
-            message="Please provide a job description to start the interview"
-            type="warning"
-            showIcon
-            style={{ marginTop: '24px', borderRadius: '8px' }}
+Example:
+- Software Engineer position
+- 3+ years experience required
+- Knowledge of React, Node.js
+- Strong problem-solving skills"
+            rows={12}
+            style={{ 
+              fontSize: '14px', 
+              lineHeight: '1.6',
+              resize: 'vertical'
+            }}
           />
-        )}
+        </Card>
+      </div>
 
-        {/* Start Button - disabled until parsed details confirmed (if resume uploaded) */}
+      {/* Validation Alerts */}
+      {!jobDescription.trim() && (
+        <Alert
+          message="Job description is required to start the interview"
+          type="warning"
+          showIcon
+          style={{ margin: '0 auto', maxWidth: '600px' }}
+        />
+      )}
+
+      {parsedResume && !parsedConfirmed && (
+        <Alert
+          message="Please confirm your parsed resume details before starting"
+          type="info"
+          showIcon
+          style={{ margin: '0 auto', maxWidth: '600px' }}
+        />
+      )}
+
+      {/* Start Interview Button */}
+      <div style={{ textAlign: 'center', marginTop: '20px' }}>
         <Button
           type="primary"
           size="large"
@@ -530,17 +571,19 @@ const IntervieweePage: React.FC = () => {
           onClick={handleStartInterview}
           disabled={!canStart}
           style={{ 
-            width: '100%', 
-            height: '50px',
-            fontSize: '16px',
+            height: '60px',
+            fontSize: '18px',
             fontWeight: '600',
-            borderRadius: '8px',
-            marginTop: '32px'
+            paddingLeft: '32px',
+            paddingRight: '32px',
+            borderRadius: '12px',
+            background: canStart ? 'linear-gradient(135deg, #1890ff, #722ed1)' : undefined,
+            border: 'none'
           }}
         >
-          Start Interview
+          Start AI Interview
         </Button>
-      </Card>
+      </div>
     </div>
   );
 };
