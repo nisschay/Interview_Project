@@ -4,18 +4,6 @@ export interface AIResponse {
   suggestions?: string[];
 }
 
-interface GeminiRequest {
-  contents: Array<{
-    parts: Array<{ text: string }>;
-  }>;
-  generationConfig?: {
-    temperature?: number;
-    topK?: number;
-    topP?: number;
-    maxOutputTokens?: number;
-  };
-}
-
 class GeminiAIService {
   private apiKey: string = '';
   private model: string = 'gemini-2.5-flash-exp';
@@ -42,19 +30,23 @@ class GeminiAIService {
       return this.getMockResponse(prompt);
     }
 
-    const request: GeminiRequest = {
-      contents: [{
-        parts: [{ text: prompt }]
-      }],
+    const request = {
+      contents: [
+        {
+          parts: [
+            {
+              text: prompt
+            }
+          ]
+        }
+      ],
       generationConfig: {
-        temperature: 0.9 + (Math.random() * 0.2), // 0.9-1.1 for more variety
-        topK: 40,
-        topP: 0.95,
+        temperature: 1.0 + (Math.random() * 0.3), // 1.0-1.3 for maximum variety and uniqueness
+        topK: 50, // Increased from 40 for more variety
+        topP: 0.98, // Increased from 0.95 for more randomness
         maxOutputTokens: 2048,
       }
-    };
-
-    try {
+    };    try {
       const response = await fetch(
         `${this.baseUrl}/${this.model}:generateContent?key=${this.apiKey}`,
         {
@@ -88,101 +80,99 @@ class GeminiAIService {
   }
 
   private getMockResponse(prompt: string): string {
-    // Role-aware fallback questions
+    // Role-aware fallback questions with CODING emphasis
     if (prompt.toLowerCase().includes('data scientist') || prompt.toLowerCase().includes('data-scientist')) {
       const dataScientistQuestions = [
-        "What is the difference between supervised and unsupervised learning?",
-        "Explain what a confusion matrix is and how you interpret precision, recall, and F1-score.",
-        "How would you handle missing data in a dataset? Explain different imputation techniques.",
-        "What is overfitting and how can you prevent it in machine learning models?",
-        "Explain the bias-variance tradeoff in machine learning.",
-        "How do you evaluate the performance of a classification model?",
-        "What is the difference between bagging and boosting ensemble methods?",
-        "Explain feature engineering and why it's important in machine learning."
+        "Write Python code to calculate the Pearson correlation coefficient between two arrays. Explain what values indicate strong vs weak correlation.",
+        "Implement a function to perform train-test split on a dataset. The function should take a dataset and test_size as input and return train and test sets.",
+        "Code a function to handle missing data: implement mean imputation for numerical columns and mode imputation for categorical columns.",
+        "Write code to calculate precision, recall, and F1-score given true labels and predicted labels arrays.",
+        "Implement k-fold cross-validation from scratch. Your function should split data into k folds and return average validation score.",
+        "Code a function to normalize features using min-max scaling. Show the formula and implementation.",
+        "Write code to detect and remove outliers using the IQR (Interquartile Range) method.",
+        "Implement one-hot encoding from scratch without using sklearn. Handle multiple categorical columns."
       ];
       return dataScientistQuestions[Math.floor(Math.random() * dataScientistQuestions.length)];
     }
     
     if (prompt.toLowerCase().includes('data engineer') || prompt.toLowerCase().includes('data-engineer')) {
       const dataEngineerQuestions = [
-        "What is the difference between ETL and ELT processes?",
-        "How would you design a data pipeline for processing large-scale data?",
-        "Explain the concept of data partitioning and when you would use it.",
-        "What are the differences between OLTP and OLAP databases?",
-        "How do you ensure data quality in a data pipeline?",
-        "Explain star schema vs snowflake schema in data warehousing.",
-        "What is Apache Spark and how does it differ from Hadoop MapReduce?",
-        "How would you optimize a slow SQL query?"
+        "Write a SQL query to find duplicate records in a user table based on email address. Show email and count of duplicates, ordered by count descending.",
+        "Code a Python function to validate CSV data schema: check for required columns, data types, and null constraints. Return a list of validation errors.",
+        "Write a SQL query using window functions to calculate running total of sales per product over time.",
+        "Implement a Python class for an ETL pipeline: include methods for extract (read CSV), transform (clean data), and load (write to database).",
+        "Write a SQL query to implement slowly changing dimension (SCD) Type 2: track historical changes with start_date, end_date, and is_current flag.",
+        "Code a function to read a large Parquet file in chunks and apply transformations without loading entire file into memory.",
+        "Write SQL to pivot data: convert rows to columns for monthly sales data (columns should be Jan, Feb, Mar, etc.).",
+        "Implement a data quality check function: validate record counts, check for null values, verify referential integrity."
       ];
       return dataEngineerQuestions[Math.floor(Math.random() * dataEngineerQuestions.length)];
     }
     
     if (prompt.toLowerCase().includes('ai') || prompt.toLowerCase().includes('ml engineer')) {
       const aiMlQuestions = [
-        "Explain the architecture of a Convolutional Neural Network (CNN).",
-        "What is transfer learning and when would you use it?",
-        "How does backpropagation work in neural networks?",
-        "Explain the difference between RNNs and LSTMs.",
-        "What is the vanishing gradient problem and how do you solve it?",
-        "How would you deploy a machine learning model to production?",
-        "Explain attention mechanisms in transformer models.",
-        "What is the difference between batch normalization and layer normalization?"
+        "Implement a simple perceptron from scratch in Python: include forward pass, activation function, and weight update logic using gradient descent.",
+        "Code the sigmoid activation function and its derivative. Explain why the derivative is important for backpropagation.",
+        "Write code to implement batch normalization for a neural network layer. Include both forward and backward pass logic.",
+        "Implement the ReLU activation function and Leaky ReLU variant. Compare their advantages and disadvantages.",
+        "Code a simple CNN architecture for MNIST digit classification using PyTorch or TensorFlow. Include convolutional layers, pooling, and fully connected layers.",
+        "Implement dropout regularization from scratch. Show how it works differently during training vs inference.",
+        "Write code for the scaled dot-product attention mechanism. Include the formula and explain each component.",
+        "Implement early stopping logic for training: monitor validation loss, save best model, and stop if no improvement for N epochs."
       ];
       return aiMlQuestions[Math.floor(Math.random() * aiMlQuestions.length)];
     }
     
     if (prompt.toLowerCase().includes('frontend')) {
       const frontendQuestions = [
-        "What is the difference between let, const, and var in JavaScript?",
-        "Explain the concept of closures in JavaScript with an example.",
-        "How would you optimize a React application for better performance?",
-        "What is the virtual DOM and how does React use it?",
-        "Explain CSS Flexbox and when you would use it over CSS Grid.",
-        "What are React hooks and why were they introduced?",
-        "How do you ensure web accessibility (WCAG) in your applications?",
-        "What is the difference between client-side and server-side rendering?"
+        "Implement a debounce function from scratch in JavaScript. Your function should delay execution until after a specified wait time has passed since the last call.",
+        "Create a custom React hook called useLocalStorage that syncs component state with localStorage. Include get, set, and remove functionality.",
+        "Write code to implement deep cloning of nested objects in JavaScript without using external libraries. Handle arrays, objects, and primitive types.",
+        "Implement a function to flatten a deeply nested array. For example: [1, [2, [3, [4]]]] should become [1, 2, 3, 4].",
+        "Code a custom useDebounce hook in React that debounces a value. The hook should update the debounced value after a specified delay.",
+        "Implement a simple event emitter class: include methods for on (subscribe), off (unsubscribe), and emit (trigger events).",
+        "Write a function to implement memoization for expensive function calls. The function should cache results based on input arguments.",
+        "Code a virtual DOM diffing algorithm (simplified version): compare two DOM trees and return the minimal set of changes needed."
       ];
       return frontendQuestions[Math.floor(Math.random() * frontendQuestions.length)];
     }
     
     if (prompt.toLowerCase().includes('backend')) {
       const backendQuestions = [
-        "What is the difference between REST and GraphQL APIs?",
-        "How would you design a scalable authentication system?",
-        "Explain database indexing and when you would use it.",
-        "What is the N+1 query problem and how do you solve it?",
-        "How do you handle rate limiting in an API?",
-        "Explain the CAP theorem in distributed systems.",
-        "What is the difference between SQL and NoSQL databases?",
-        "How would you implement caching to improve API performance?"
+        "Implement a singly linked list class with methods for: insert (at beginning/end), delete (by value), search, and display. Use your preferred language.",
+        "Code a LRU (Least Recently Used) Cache with get and put operations that both run in O(1) time complexity. Explain your data structure choice.",
+        "Write a function to detect if a linked list has a cycle. Return true if cycle exists, false otherwise. Can you solve it in O(1) space?",
+        "Implement a Hash Map from scratch using an array and hash function. Include methods for set, get, and delete with collision handling.",
+        "Code a function to reverse a linked list iteratively. Then solve it recursively. Compare the space complexity of both approaches.",
+        "Implement a Queue using two Stacks. Include enqueue and dequeue operations and explain the time complexity.",
+        "Write code to find the middle element of a linked list in one pass (without counting length first). Use the slow and fast pointer technique.",
+        "Implement merge sort for a linked list. Your code should sort the list in O(n log n) time without using extra space for an array."
       ];
       return backendQuestions[Math.floor(Math.random() * backendQuestions.length)];
     }
     
     if (prompt.toLowerCase().includes('devops')) {
       const devopsQuestions = [
-        "What is the difference between Docker and Kubernetes?",
-        "How would you design a CI/CD pipeline for a web application?",
-        "Explain Infrastructure as Code and its benefits.",
-        "What is blue-green deployment and when would you use it?",
-        "How do you monitor and debug issues in production?",
-        "What is the difference between horizontal and vertical scaling?",
-        "Explain container orchestration and why it's important.",
-        "How would you ensure security in a DevOps pipeline?"
+        "Write a Bash script to monitor system health: check CPU usage, memory usage, and disk space. Send alert if any metric exceeds 80%.",
+        "Code a Python script to automate Docker container deployment: pull image, stop old container, start new container, run health checks.",
+        "Implement a log parsing script in Python: read application logs, extract error messages, group by error type, and generate summary report.",
+        "Write a script to backup a PostgreSQL database, compress it, upload to S3, and verify the backup integrity.",
+        "Code a monitoring script that collects metrics (CPU, memory, disk I/O) and sends them to Prometheus in the correct format.",
+        "Implement a blue-green deployment script: create new infrastructure, run tests, switch traffic, keep old version for quick rollback.",
+        "Write a script to scan Docker images for vulnerabilities, generate a report, and fail the pipeline if critical issues are found.",
+        "Code a Kubernetes health check endpoint in your preferred language: check database connection, Redis connection, and third-party API availability."
       ];
       return devopsQuestions[Math.floor(Math.random() * devopsQuestions.length)];
     }
     
-    // Generic fallback
+    // Generic fallback with coding emphasis
     const technicalQuestions = [
-      "What is the difference between let, const, and var in JavaScript?",
-      "Explain the concept of closures in JavaScript.",
-      "What are the differences between SQL and NoSQL databases?",
-      "Explain the concept of RESTful APIs.",
-      "What is the difference between synchronous and asynchronous programming?",
-      "Explain Big O notation and time complexity.",
-      "How would you implement user authentication in a web application?",
-      "What are the principles of clean code?"
+      "Implement a function to reverse a string in your preferred programming language. Can you do it in-place?",
+      "Write code to find the second largest element in an array without sorting the entire array.",
+      "Implement a function to check if a string is a palindrome. Ignore spaces and punctuation.",
+      "Code a function to find all duplicate elements in an array. Return them in a new array.",
+      "Write a function to merge two sorted arrays into one sorted array without using extra space.",
+      "Implement a basic calculator that can handle addition, subtraction, multiplication, and division with proper operator precedence."
     ];
     return technicalQuestions[Math.floor(Math.random() * technicalQuestions.length)];
   }

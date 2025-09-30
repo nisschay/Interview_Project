@@ -15,7 +15,7 @@ import type { Message } from '../../types';
 import aiService from '../../services/aiService';
 
 const { TextArea } = Input;
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 const ChatInterface: React.FC = () => {
   const dispatch = useDispatch();
@@ -413,20 +413,11 @@ const ChatInterface: React.FC = () => {
           overflow: 'auto',
           minHeight: 0
         }}>
-          {messages.filter(m => !m.questionNumber || m.questionNumber === currentQuestionNumber).length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 40 }}>
-              <RobotOutlined style={{ fontSize: 48, color: '#667eea', marginBottom: 16 }} />
-              <Title level={4} style={{ color: '#667eea' }}>Question {currentQuestionNumber}</Title>
-              <Text type="secondary">
-                Type your answer below and click Send when ready.
-              </Text>
-            </div>
-          ) : (
-            <List
-              dataSource={messages.filter(m => 
-                !m.questionNumber || m.questionNumber === currentQuestionNumber
-              )}
-              renderItem={(message: Message) => (
+          <List
+            dataSource={messages.filter(m => 
+              !m.questionNumber || m.questionNumber === currentQuestionNumber
+            )}
+            renderItem={(message: Message) => (
                 <List.Item style={{ border: 'none', padding: '8px 0' }}>
                   <List.Item.Meta
                     avatar={
@@ -479,7 +470,6 @@ const ChatInterface: React.FC = () => {
                 </List.Item>
               )}
             />
-          )}
           
           {isTyping && (
             <div style={{ padding: '8px 0' }}>

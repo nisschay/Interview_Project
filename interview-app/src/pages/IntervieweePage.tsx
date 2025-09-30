@@ -226,8 +226,8 @@ HARD = ${config.difficulty === 'hard' ? '✓ System design, architecture, "Desig
 2. Question MUST use ONLY allowed topics from the list above
 3. Question MUST be UNIQUE (different from already asked)
 4. Question MUST NOT use forbidden topics
-5. If Data Scientist/Engineer: ONLY ML/data topics, NO web dev
-6. If Frontend/Backend: ONLY web dev topics, NO ML/data science
+5. ${selectedRole === 'product-manager' ? 'Product Manager: NO coding, NO ML algorithms - focus on strategy, metrics, user research' : 'If Data Scientist/Engineer: ONLY ML/data topics, NO web dev'}
+6. ${selectedRole === 'product-manager' ? 'Ask about product decisions, roadmap, metrics, stakeholder management' : 'If Frontend/Backend: ONLY web dev topics, NO ML/data science'}
 
 ✅ GOOD EXAMPLES:
 ${selectedRole === 'data-scientist' && selectedLevel === 'junior' && config.difficulty === 'easy' ? 
