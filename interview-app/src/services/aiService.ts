@@ -10,8 +10,11 @@ class GeminiAIService {
   private baseUrl: string = 'https://generativelanguage.googleapis.com/v1beta/models';
 
   constructor() {
-    // Production API key - embedded for server deployment
-    this.apiKey = 'AIzaSyDjEV3JYsJmZ7H6QTao3OoGVE0ISm-yAJU';
+    // Load API key from environment variable
+    this.apiKey = process.env.GEMINI_API_KEY || '';
+    if (!this.apiKey) {
+      console.warn('⚠️  No API key found in environment variables. Please set GEMINI_API_KEY.');
+    }
     console.log('🤖 AI Service initialized with Gemini API');
   }
 
