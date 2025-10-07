@@ -10,12 +10,29 @@ class GeminiAIService {
   private baseUrl: string = 'https://generativelanguage.googleapis.com/v1beta/models';
 
   constructor() {
-    // Load API key from environment variable
-    this.apiKey = process.env.GEMINI_API_KEY || '';
+    // Safely load API key (browser-safe). Prefer server-side usage; frontend will usually run with mock responses.
+    let key = '';
+    try {
+      // Vite style env (never expose real prod key in frontend!)
+      // import.meta is a special syntax; guard with typeof to avoid ReferenceError in some build tools
+      if (typeof import.meta !== 'undefined') {
+        const anyImport: any = (import.meta as any);
+        key = anyImport?.env?.VITE_GEMINI_API_KEY || '';
+      }
+    } catch {}
+    try {
+      // Node / SSR fallback (still avoid bundling actual key in client bundle)
+      if (!key && typeof process !== 'undefined' && (process as any).env) {
+        key = (process as any).env.GEMINI_API_KEY || '';
+      }
+    } catch {}
+    this.apiKey = key;
     if (!this.apiKey) {
-      console.warn('⚠️  No API key found in environment variables. Please set GEMINI_API_KEY.');
+      console.warn('⚠️  No Gemini API key available on client. Using mock AI responses. (Set VITE_GEMINI_API_KEY for local testing only)');
+    } else {
+      console.log('🔐 Gemini API key loaded (client-side use not recommended for production).');
     }
-    console.log('🤖 AI Service initialized with Gemini API');
+    console.log('🤖 AI Service initialized');
   }
 
   setApiKey(key: string) {
